@@ -1,0 +1,8 @@
+* text=auto
+*.py text eol=lf
+*.md text eol=lf
+*.bat text eol=crlf
+*.joblib binary
+*.png binary
+# Preserve the exact official dataset bytes and the recorded SHA-256 on checkout.
+student-performance-prediction/data/raw/*.csv -text whitespace=cr-at-eol

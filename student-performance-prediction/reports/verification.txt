@@ -1,0 +1,37 @@
+============================= test session starts =============================
+platform win32 -- Python 3.12.7, pytest-9.1.1, pluggy-1.6.0 -- C:\Users\yoits\Documents\ChatGPT\AI-Based Student Performance Prediction Using Probability\student-performance-prediction\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\yoits\Documents\ChatGPT\AI-Based Student Performance Prediction Using Probability\student-performance-prediction
+plugins: anyio-4.15.1
+collecting ... collected 20 items
+
+tests/test_project.py::test_schema_rejects_invalid_data PASSED           [  5%]
+tests/test_project.py::test_official_labels_duplicates_and_whitespace PASSED [ 10%]
+tests/test_project.py::test_split_is_stratified_disjoint_and_reproducible PASSED [ 15%]
+tests/test_project.py::test_both_official_csv_formats[,] PASSED          [ 20%]
+tests/test_project.py::test_both_official_csv_formats[;] PASSED          [ 25%]
+tests/test_project.py::test_saved_model_predictors_and_train_only_imputation[enrollment] PASSED [ 30%]
+tests/test_project.py::test_saved_model_predictors_and_train_only_imputation[first_semester] PASSED [ 35%]
+tests/test_project.py::test_saved_test_metrics_match_actual_predictions PASSED [ 40%]
+tests/test_project.py::test_selection_uses_only_cv_and_all_models_are_compared PASSED [ 45%]
+tests/test_project.py::test_probability_metrics_and_threshold PASSED     [ 50%]
+tests/test_project.py::test_risk_band_boundaries[0-Low] PASSED           [ 55%]
+tests/test_project.py::test_risk_band_boundaries[0.2999-Low] PASSED      [ 60%]
+tests/test_project.py::test_risk_band_boundaries[0.3-Medium] PASSED      [ 65%]
+tests/test_project.py::test_risk_band_boundaries[0.5999-Medium] PASSED   [ 70%]
+tests/test_project.py::test_risk_band_boundaries[0.6-High] PASSED        [ 75%]
+tests/test_project.py::test_risk_band_boundaries[1-High] PASSED          [ 80%]
+tests/test_project.py::test_fairness_denominators_and_undefined_groups PASSED [ 85%]
+tests/test_project.py::test_artifacts_are_complete PASSED                [ 90%]
+tests/test_project.py::test_streamlit_all_pages_and_both_prediction_modes PASSED [ 95%]
+tests/test_project.py::test_streamlit_rejects_impossible_semester_counts PASSED [100%]
+
+============================= 20 passed in 18.39s =============================
+Python syntax checks passed.
+{
+  "checked_at_utc": "2026-09-22T09:49:34.701993+00:00",
+  "port": 62751,
+  "health": "ok",
+  "html_served": true,
+  "server_stopped": true
+}

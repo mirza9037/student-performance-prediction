@@ -1,0 +1,37 @@
+{
+  "rows_before": 4424,
+  "rows": 4424,
+  "duplicates_removed": 0,
+  "sha256": "a1b1a6531bbb93a5c7fdf0093b47172776652a4ffb12342fb79655c85b74801b",
+  "source": {
+    "url": "https://archive.ics.uci.edu/static/public/697/data.csv",
+    "synthetic": false
+  },
+  "original_target_counts": {
+    "Graduate": 2209,
+    "Dropout": 1421,
+    "Enrolled": 794
+  },
+  "binary_target_counts": {
+    "0": 3003,
+    "1": 1421
+  },
+  "missing_predictor_values": 0,
+  "train_size": 3539,
+  "test_size": 885,
+  "random_state": 42,
+  "train_prevalence": 0.3212771969482905,
+  "test_prevalence": 0.32090395480225986,
+  "trained_at_utc": "2026-09-22T09:46:33.709547+00:00",
+  "python": "3.12.7",
+  "versions": {
+    "numpy": "2.5.3",
+    "pandas": "2.3.3",
+    "scikit-learn": "1.7.2",
+    "matplotlib": "3.11.2",
+    "seaborn": "0.13.2",
+    "plotly": "6.9.0",
+    "streamlit": "1.50.0",
+    "joblib": "1.6.0"
+  }
+}
