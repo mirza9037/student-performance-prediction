@@ -1,0 +1,12 @@
+# Streamlit Community Cloud runtime (select Python 3.12).
+# Match the environment used to serialize the committed scikit-learn models.
+numpy==2.5.3
+pandas==2.3.3
+scikit-learn==1.7.2
+scipy==1.18.1
+joblib==1.6.0
+threadpoolctl==3.7.0
+matplotlib==3.11.2
+seaborn==0.13.2
+plotly==6.9.0
+streamlit==1.50.0

@@ -165,8 +165,9 @@ def test_artifacts_are_complete(bundle):
     assert meta["sha256"] == bundle["metadata"]["sha256"]
 
 
-def test_streamlit_all_pages_and_both_prediction_modes():
-    app = AppTest.from_file(str(ROOT / "app.py"), default_timeout=60).run()
+@pytest.mark.parametrize("entrypoint", [ROOT / "app.py", ROOT.parent / "streamlit_app.py"])
+def test_streamlit_all_pages_and_both_prediction_modes(entrypoint):
+    app = AppTest.from_file(str(entrypoint), default_timeout=60).run()
     assert not app.exception
     app.button[0].click().run()
     assert not app.exception and len(app.metric) == 2
