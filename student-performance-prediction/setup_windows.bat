@@ -1,9 +1,9 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-python -c "import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)"
+python -c "import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)"
 if errorlevel 1 (
-  echo Python 3.11 or newer is required. Install it and enable Add Python to PATH.
+  echo Python 3.12 or newer is required. Python 3.12 matches the tested runtime.
   exit /b 1
 )
 if not exist ".venv\Scripts\python.exe" python -m venv .venv

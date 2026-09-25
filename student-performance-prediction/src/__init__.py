@@ -1,1 +1,1 @@
-"""Leakage-aware student dropout probability research."""
+"""Student pass/fail prediction using Bayes' theorem."""

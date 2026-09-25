@@ -1,0 +1,8 @@
+{
+  "source_url": "https://archive.ics.uci.edu/static/public/320/student%2Bperformance.zip",
+  "dataset": "UCI Student Performance, mathematics only",
+  "doi": "https://doi.org/10.24432/C5TG7T",
+  "license": "CC BY 4.0",
+  "synthetic": false,
+  "sha256": "e47f9ee225e1ee6e69b7564e6dac7123e80b8486677fe111f351964cef5dec80"
+}

@@ -1,152 +1,153 @@
 # AI-Based Student Performance Prediction Using Probability
 
-A complete research prototype that estimates the **probability of recorded student dropout**, rather than only a Pass/Fail label. It compares information available at enrollment with information available after the first semester. The dashboard is a decision-support demonstration, not a validated institutional deployment.
+A Python research application that applies **Bayes' theorem** to estimate a student's probability of passing or failing.
 
-## Main features
+## What the app does
 
-- Two prediction stages with strict feature allowlists; no Gender or second-semester prediction inputs.
-- Logistic Regression, Gaussian Naive Bayes, Random Forest, and HistGradientBoosting.
-- Five-fold training cross-validation with separate five-fold sigmoid calibration inside each fold.
-- One shared, untouched 20% test set for final evaluation of selected models.
-- Probability metrics, calibration diagrams, fairness diagnostics, bootstrap intervals and permutation importance.
-- Four Streamlit pages: Individual Prediction, Model Performance, Research Insights, Ethics and Limitations.
-- Reproducible seed 42, source checksum, generated report, Windows launchers and executed tests.
+1. **Prediction:** adjust student factors to see pass/fail probabilities, a likely-pass/fail classification and a what-if chart.
+2. **Bayes explained:** inspect training priors, each conditional likelihood, the normalization calculation and any calibration adjustment.
+3. **Statistics:** inspect means, sample standard deviations, outcome-group summaries, Pearson/Spearman correlations and observed conditional pass rates.
+4. **Model performance:** compare raw and calibrated Bayes, then inspect held-out metrics, confusion matrix, ROC and calibration.
+5. **Data and method:** review target definitions, data provenance, experimental design and limitations.
 
-## Project structure
+## Data: real research versus the exact four-factor workflow
 
-```text
-student-performance-prediction/
-├── app.py
-├── train.py
-├── requirements.txt
-├── requirements-lock.txt             # exact environment from the verified run
-├── README.md
-├── setup_windows.bat
-├── run_app.bat
-├── .gitignore
-├── data/raw/uci_student_dropout.csv
-├── models/model_bundle.joblib
-├── reports/
-│   ├── research_report.md
-│   ├── model_comparison.csv           # training CV only; all eight candidates
-│   ├── cv_fold_metrics.csv
-│   ├── test_metrics.csv               # only the selected model per stage
-│   ├── test_confidence_intervals.csv
-│   ├── calibration_bins.csv
-│   ├── fairness_audit.csv
-│   ├── feature_importance.csv
-│   ├── experiment_metadata.json
-│   └── figures/
-│       ├── confusion_matrix.png       # first-semester convenience copies
-│       ├── calibration_curve.png
-│       ├── roc_curve.png
-│       ├── feature_importance.png
-│       ├── enrollment/               # all four stage-specific figures
-│       └── first_semester/
-├── scripts/smoke_server.py
-├── src/
-│   ├── __init__.py
-│   ├── config.py
-│   ├── data.py
-│   ├── modeling.py
-│   ├── evaluation.py
-│   └── reporting.py
-└── tests/test_project.py
+The bundled dataset is the **mathematics subset** of [UCI Student Performance](https://doi.org/10.24432/C5TG7T), collected from two Portuguese secondary schools and provided under CC BY 4.0. There are 395 records, 265 passes and 130 fails under the declared **G3 ≥10/20** pass definition.
+
+Its actual predictors are:
+- `absences`: number of school absences (not attendance percentage).
+- `studytime`: weekly study-time band, 1: <2h, 2: 2–5h, 3: 5–10h, 4: >10h.
+- `G1`: first-period grade, 0–20.
+- `G2`: second-period grade, 0–20.
+
+G3 (final grade) defines the target and is never a predictor. G1/G2 are not assignment scores.
+Only mathematics is used to avoid overlapping students across the two subject files.
+Absence collection timing is unspecified; this is a retrospective demonstration after G2, not a validated early-warning forecast.
+
+For **exactly the four inputs in the project proposal**, choose **My four-factor CSV**. Supply anonymous historical data using these headers:
+
+```csv
+attendance,study_hours,previous_marks,assignment_score,final_marks
 ```
 
-## Dataset source
+Attendance, previous marks, assignment score and final marks are percentages (0–100); study_hours is hours per week (0–168). Pass = final_marks at or above the institution's pass mark (default 50). Set this threshold before training.
 
-Official [UCI Predict Students’ Dropout and Academic Success](https://doi.org/10.24432/C5MC89), CC BY 4.0. The data describe Portuguese higher education. The loader tries the supplied [CSV endpoint](https://archive.ics.uci.edu/static/public/697/data.csv), then the official UCI ZIP archive if necessary. Both are official sources. It validates the schema before saving. No synthetic data fallback is used: download failures produce an actionable error.
+Use one row per student, 50–10,000 rows, and at least 15 examples of each outcome after removing exact duplicates. This is a technical minimum, not a research sample-size recommendation. Use a much larger representative cohort where possible. All predictors must precede the final assessment; no final-result-derived assignment scores. Blank predictors are allowed, final marks are required, and a feature cannot be entirely missing. No names, IDs or emails.
 
-Target: **Dropout = 1; Graduate or Enrolled = 0**. The latter combines completed and unresolved outcomes, so the score is not a general academic-failure probability. The downloaded CSV is cached and reused. Delete only that project-owned CSV if you intentionally want a fresh download.
+No assignment scores, attendance percentages or exact study hours are fabricated to fill the UCI gaps. The custom workflow trains from the actual uploaded columns. Uploaded records and models remain in session memory; they are not persisted or shared between users. Clearing the session removes them.
 
-## Installation on Windows
+## Installation and launch
 
-Install Python **3.11 or newer**, including pip, and enable “Add Python to PATH.” Open this project folder in a terminal.
-
-The simplest setup is:
+Use **Python 3.12** for compatibility with the committed model. On Windows:
 
 ```powershell
+cd student-performance-prediction
 .\setup_windows.bat
-```
-
-This creates `.venv`, activates it, upgrades pip, installs dependencies and trains both stages. Training fits many nested models, so allow several minutes after downloads finish.
-
-Streamlit is pinned to 1.50.0: newer wheels include deeply nested bundled assets that can exceed Windows' default path limit when installed in long project folders. This project does not require changing Windows registry settings.
-
-Manual setup without changing PowerShell's execution policy:
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install --upgrade pip
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe train.py
-```
-
-For the exact environment used in the delivered run, replace `requirements.txt` with `requirements-lock.txt`. The lock records a Windows/Python 3.12 environment; other platforms may need the bounded main requirements. Models should be retrained after changing scikit-learn versions. Load joblib artifacts only from trusted sources.
-
-On macOS/Linux, the equivalent interpreter is `.venv/bin/python` after `python3 -m venv .venv`.
-
-## Train or regenerate the research outputs
-
-```powershell
-.\.venv\Scripts\python.exe train.py
-```
-
-Or, after activating the environment, `python train.py`. The command downloads and validates the official data if missing, prints target distribution and fold progress, selects models, fits calibrated final models, and writes reports, figures and the bundle. It replaces only this project's generated output files; it never refits in response to dashboard entries. Relative paths are resolved from the project itself.
-
-The two model selections are frozen before either is tested. The saved model bundle contains both calibrated models, feature names, training medians/ranges for the form, metrics and provenance. It contains no submitted dashboard profiles.
-
-## Launch the dashboard
-
-```powershell
 .\run_app.bat
 ```
 
-Or:
+Or manually:
 
 ```powershell
-.\.venv\Scripts\python.exe -m streamlit run app.py --server.address 127.0.0.1 --browser.gatherUsageStats false
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe train.py
+.\.venv\Scripts\python.exe -m streamlit run app.py
 ```
 
-Open the local URL printed by Streamlit (normally `http://127.0.0.1:8501`). Press **Ctrl+C** in the terminal to stop. Choose a prediction stage in the sidebar, enter values using the source grading scales, and click **Calculate risk probability**. Initial form values are training medians, not an actual student. Recalculate after editing a profile.
+The included trained model permits immediate launch once dependencies are installed.
+Run Streamlit from the repository root with `streamlit_app.py` for cloud parity.
 
-Low risk is below 30%, Medium is 30% to below 60%, and High is at least 60%. The threshold slider changes the support-review flag; it does not change the probability or these bands. Performance figures use the original 0.50 threshold. Any operational threshold must be validated by the institution.
-
-The form collects no names or identifiers and does not save submissions to disk. Enter only anonymous information. Dataset scales and economic values cannot be assumed equivalent to Pakistani values.
-
-## Testing and execution checks
-
-Run these after training; integration tests deliberately require the real generated artifacts:
+## Training and reproducibility
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest -v
-.\.venv\Scripts\python.exe -m compileall -q app.py train.py src tests scripts
-.\.venv\Scripts\python.exe scripts\smoke_server.py
+.\.venv\Scripts\python.exe train.py
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\python.exe scripts/smoke_server.py
 ```
 
-Tests validate input rejection, deduplication, split isolation, feature exclusions, fitted train-only medians, finite probabilities, saved artifact consistency, group denominators, threshold behavior, and actual Streamlit rendering/submission in both modes using AppTest. The smoke script launches a local server on an available port, checks its health and HTML, and always terminates its own process. Server health alone does not execute the app: AppTest supplies the complementary page-execution check. Results are recorded in `reports/verification.txt` and `reports/server_smoke.json` in the delivered project.
+The official dataset is downloaded only when missing. Source URL, license and SHA-256 are recorded beside it.
+There is no synthetic fallback.
 
-## Research methodology
+To run a private four-factor experiment locally, use a separate output directory outside the repository:
 
-Exact duplicate rows are removed before a seed-42 stratified 80/20 split. Median imputation and optional scaling are inside each classifier pipeline. Both stages use the same train/test membership. Five outer folds compare each sigmoid-calibrated model; five inner folds supply out-of-fold scores for calibration. Inner preprocessing cannot see outer validation rows. The final calibrated model is fitted using training data only.
+```powershell
+.\.venv\Scripts\python.exe train.py --schema custom --csv C:\data\anonymous_students.csv --pass-mark 50 --output C:\data\student_experiment
+```
 
-Model selection prioritizes mean CV **PR-AUC, implemented as average precision**, then recall, then lower Brier score, then F1. This is a lexicographic ranking with secondary criteria as tie-breakers. Accuracy is secondary. Class weighting is enabled for Logistic Regression, Random Forest and HistGradientBoosting; GaussianNB uses empirical priors and has no built-in class_weight argument.
+This saves model/results to your chosen directory, while the dashboard's CSV workflow works in memory.
+Do not commit private data or institutional model artifacts to GitHub.
 
-The test set evaluates only the selected model per stage. It also supports the fixed-threshold Gender audit, ten-repeat permutation importance, and descriptive bootstrap intervals. None of these diagnostic results feeds back into model selection. Detailed methods and actual results are in [the research report](reports/research_report.md).
+## Method
 
-## Limitations and responsible use
+Inputs are assigned to four predeclared intervals. Categorical Naive Bayes estimates:
 
-This is a retrospective single-source experiment. Unknown collection timestamps, unresolved Enrolled outcomes and the random rather than temporal split limit early-warning claims. Debtor, tuition and scholarship status must genuinely be measured at the selected prediction time. Local institutions must verify that assumption or remove the affected fields and retrain.
+`P(Pass | x) = P(Pass) × product P(input_interval | Pass) / sum of both class joint scores`
 
-Calibration is an estimated correction, not a guarantee. Portuguese-to-Pakistani transfer requires local cohort validation, scale alignment, fairness review and likely retraining/recalibration. Gender exclusion does not remove proxies. Group differences need investigation and do not automatically prove discrimination. Feature importance is not causal evidence. Human review is required before every intervention, and scores must never be treated as measures of intelligence or potential.
+Class priors come from training frequencies. Conditional likelihoods use Laplace smoothing:
+`(class-and-interval count + 1) / (class count + 4)`.
+Fail probability is `1 − pass probability`. The app verifies the raw formula against the fitted model.
+
+Categorical bins are appropriate for the study-time bands and make conditional probabilities easy to explain.
+Within-bin edits do not change probability. No monotonic or causal improvement is promised.
+Naive Bayes assumes conditional independence, which correlated grades can violate.
+
+A reproducible stratified 80/20 split (seed 42) reserves test data.
+Raw Bayes and sigmoid-calibrated Bayes are compared on five training folds.
+Calibration has five inner folds; preprocessing is fitted inside each fold.
+The version with the lowest mean Brier score is selected (log loss breaks ties), then evaluated on the held-out test set.
+The saved models remain trained on only the 80% training portion.
+The dashboard distinguishes raw Bayes from the calibrated output.
+
+Statistics use training records only:
+- Mean and sample standard deviation (ddof=1), excluding missing values.
+- Pearson correlation for linear association; Spearman for ranked association.
+- Study-time code summaries are **not hours**.
+- Observed P(Pass | interval) includes counts; it differs from the model's P(interval | class).
+
+The actual grade pass mark and prediction decision threshold are different. The latter defaults to probability 0.50 and affects only classification. The reported test metrics always use 0.50.
+
+## Results and files
+
+Selected model: calibrated categorical Naive Bayes.
+On 79 held-out UCI records: accuracy 0.8734, pass precision 0.9778, pass recall 0.8302, fail recall 0.9615, pass F1 0.8980, ROC-AUC 0.9049, pass average precision 0.9583, Brier 0.1119 and log loss 0.3661.
+
+These results apply only to the UCI experiment, not an unseen uploaded dataset.
+
+- `app.py`: five-page dashboard and session-only CSV training.
+- `train.py`: reproducible offline experiment.
+- `src/config.py`: schemas, ranges and fixed bins.
+- `src/data.py`: download, validation and target construction.
+- `src/modeling.py`: Bayes pipeline, explanation and what-if calculations.
+- `src/evaluation.py`: nested CV, selection and metrics.
+- `src/reporting.py`: statistics, figures and generated research report.
+- `models/model_bundle.joblib`: trusted trained artifact (never load untrusted joblib files).
+- `reports/`: complete metrics, descriptive CSVs, figures, metadata and report.
+- `tests/test_project.py`: data validation, exact Bayes math, leakage checks and UI tests.
+
+## Deployment
+
+Use Streamlit Community Cloud with repository `mirza9037/student-performance-prediction`,
+branch `master`, entrypoint `streamlit_app.py`, Python **3.12**, no secrets.
+Root runtime pins match the saved model. Enable public sharing after deployment.
+If the repository is private, grant Streamlit access through its official GitHub connection flow.
+
+## Limitations
+
+The small historical dataset cannot establish performance at a new institution or in Pakistan.
+G1/G2 are related to the final grade; absence timing is unresolved.
+Correlations and what-if charts are not causal claims. Calibration quality varies by cohort.
+No subgroup fairness conclusion is claimed; excluding gender does not remove proxy bias.
+Use human review and supportive interventions, never treat a prediction as a guaranteed result.
+Repeated students require grouped validation; this prototype assumes one record per student.
 
 ## Screenshots
 
-Placeholder for your final-year submission: add screenshots of Individual Prediction, Model Performance, Research Insights and Ethics and Limitations after launching the dashboard. No student identifiers should appear. Generated evaluation figures are already available in `reports/figures/`.
+The running app contains Prediction, Bayes explained, Statistics, Model performance and Data and method pages.
+Scientific charts are saved under `reports/figures/`.
 
 ## References
 
-- [UCI dataset](https://doi.org/10.24432/C5MC89)
-- [Scikit-learn probability calibration](https://scikit-learn.org/stable/modules/calibration.html)
-- [UNESCO Recommendation on the Ethics of Artificial Intelligence](https://www.unesco.org/en/articles/recommendation-ethics-artificial-intelligence)
+- Cortez, P. (2008), [UCI Student Performance](https://doi.org/10.24432/C5TG7T), CC BY 4.0.
+- [Scikit-learn Naive Bayes](https://scikit-learn.org/stable/modules/naive_bayes.html).
+- [Scikit-learn probability calibration](https://scikit-learn.org/stable/modules/calibration.html).

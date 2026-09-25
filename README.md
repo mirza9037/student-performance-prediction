@@ -1,46 +1,54 @@
 # AI-Based Student Performance Prediction Using Probability
 
-A research-based Python project that estimates calibrated student dropout probabilities using the official UCI dataset. It includes enrollment and first-semester prediction models, a four-page Streamlit dashboard, a research report, fairness diagnostics, and reproducible tests.
+Predict **pass and fail probabilities** with Naive Bayes, explore student factors, and see the calculation.
 
-The complete project is in **[student-performance-prediction/](student-performance-prediction/)**. See its [installation and usage guide](student-performance-prediction/README.md) and [research report](student-performance-prediction/reports/research_report.md).
+This revision replaces the earlier dropout system. It includes:
+- Complementary pass/fail probabilities and a clear likely-pass/likely-fail classification.
+- Interactive input changes and one-factor what-if charts.
+- A worked Bayes calculation with priors, conditional likelihoods and posterior probabilities.
+- Means, sample standard deviations, Pearson/Spearman correlations and conditional pass rates.
+- Training-only cross-validation, optional sigmoid calibration and held-out evaluation.
 
-## Run on Windows
+## Two data workflows
 
-With Python 3.11 or newer installed:
+**Research dataset (works immediately):** real [UCI Student Performance](https://doi.org/10.24432/C5TG7T) mathematics records. Inputs are absences, study-time band, first-period marks and second-period marks. Pass is defined as final grade ≥10/20.
+
+**Your four-factor CSV:** attendance (%), study hours/week, previous marks (%) and assignment score (%), with historical final marks. Upload anonymous records in the app to train and use this exact four-factor model. The pass mark defaults to 50/100 and is configurable before training.
+
+**Data limitation:** UCI does not contain assignment scores, attendance percentages or exact study hours. These are not invented or substituted. The complete four-factor workflow requires your own compatible historical data. No synthetic research dataset is included.
+
+## Run locally
+
+From the repository root, using the existing virtual environment:
 
 ```powershell
-cd student-performance-prediction
-.\setup_windows.bat
-.\run_app.bat
+.\student-performance-prediction\.venv\Scripts\python.exe -m streamlit run streamlit_app.py
 ```
 
-The virtual environment is intentionally excluded from this repository. Setup installs dependencies and regenerates the research outputs. Pretrained models and the original experiment's results are included for inspection.
+For a fresh installation, open `student-performance-prediction` and run `setup_windows.bat`, then `run_app.bat`.
 
-## Streamlit Community Cloud deployment
+See the [complete setup and research guide](student-performance-prediction/README.md) and [generated report](student-performance-prediction/reports/research_report.md).
 
-The repository includes a cloud entrypoint and runtime dependencies. In Streamlit Community Cloud, deploy with:
+## Verified research results
+
+395 real mathematics records, with 316 used for training and 79 held out for testing. Selected model: **calibrated categorical Naive Bayes**.
+
+- Accuracy: 87.3%
+- Fail recall: 96.2%; pass recall: 83.0%
+- ROC-AUC: 0.905
+- Brier score: 0.112 (raw Bayes: 0.121; training-prior baseline: 0.221)
+
+These are retrospective results for the UCI inputs, not accuracy claims for the four-factor CSV model. Absence timing is unspecified, prior-period grades are strong predictors, and local/future-cohort validation is needed.
+
+## Streamlit Community Cloud
 
 - Repository: `mirza9037/student-performance-prediction`
 - Branch: `master`
-- Main file path: `streamlit_app.py`
-- Python version: **3.12** in Advanced settings
-- Secrets: none required
+- Main file: `streamlit_app.py`
+- Python: **3.12**
+- Secrets: none
+- Set Sharing to **This app is public and searchable** for anonymous access.
 
-The root `requirements.txt` pins the numerical and model libraries to the versions used for the committed trained models. The entrypoint reuses the existing application; deployment loads the models without retraining. The research/development requirements remain inside the project folder.
+The root requirements pin the trained model's runtime. The app loads the bundled model without retraining. GitHub source can remain private if Streamlit is authorized to access it. A GitHub push is not a live deployment.
 
-For anonymous internet access, set the deployed app's **Settings → Sharing → Who can view this app** to **This app is public and searchable**. The GitHub source repository can remain private. A successful GitHub push alone does not publish a running app.
-
-After deployment, verify both prediction modes, all four pages, and public access without a Streamlit login. Public users should enter only anonymous information; the application does not persist submitted profiles to disk.
-
-## Verified results
-
-- Enrollment: calibrated Random Forest; test average precision 0.731, recall 52.1%, Brier score 0.153.
-- First semester: calibrated HistGradientBoosting; test average precision 0.864, recall 69.0%, Brier score 0.104.
-- Both models were selected using training-only cross-validation and evaluated on the same 885 held-out students. Recall uses threshold 0.50.
-- All 21 tests passed, including the cloud entrypoint; Python syntax and live Streamlit startup were verified.
-
-## Dataset and responsible use
-
-The [UCI Predict Students' Dropout and Academic Success dataset](https://doi.org/10.24432/C5MC89) is provided under CC BY 4.0. Dropout is the positive class; Graduate and Enrolled form the negative class. Gender and second-semester variables are excluded from prediction.
-
-This is a research prototype. Unresolved outcomes, prediction-time data availability, subgroup differences, and transfer from Portuguese data to Pakistani institutions require further investigation. Local validation and human review are required before institutional deployment.
+Custom uploads are processed in session memory and are not written to disk. Do not include student identifiers. The previous dropout implementation remains available in Git history at commit `6db7858`.

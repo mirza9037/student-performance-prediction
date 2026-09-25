@@ -1,188 +1,202 @@
-"""Generate the research narrative from executed results, never invented scores."""
+"""Descriptive statistics, conditional frequencies, figures and research report."""
 from __future__ import annotations
 
+import json
+from pathlib import Path
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
-
-from src.config import ENROLLMENT, REPORTS, RESEARCH_QUESTIONS, SEMESTER
-
-
-def markdown_table(frame: pd.DataFrame) -> str:
-    """Small dependency-free Markdown serializer for generated research tables."""
-    def cell(value: object) -> str:
-        if isinstance(value, float):
-            return "undefined" if pd.isna(value) else f"{value:.4f}"
-        return str(value).replace("|", "/").replace("\n", " ")
-    lines = ["| " + " | ".join(frame.columns) + " |", "| " + " | ".join(["---"] * len(frame.columns)) + " |"]
-    lines.extend("| " + " | ".join(cell(value) for value in row) + " |" for row in frame.itertuples(index=False, name=None))
-    return "\n".join(lines)
+import seaborn as sns
+from sklearn.calibration import calibration_curve
+from sklearn.metrics import ConfusionMatrixDisplay, RocCurveDisplay
+from src.config import SCHEMAS, TITLE
+from src.modeling import bin_label
 
 
-def write_report(metadata: dict, comparison: pd.DataFrame, tests: pd.DataFrame,
-                 fairness: pd.DataFrame, importance: pd.DataFrame) -> None:
-    """Write the required report with results for both frozen model selections."""
-    enrollment = tests.set_index("stage").loc["enrollment"]
-    semester = tests.set_index("stage").loc["first_semester"]
-    delta = semester["pr_auc"] - enrollment["pr_auc"]
-    summary = "\n".join(
-        f"- **{row.stage}**: {row.model}; test AP {row.pr_auc:.4f}, recall {row.recall:.4f}, "
-        f"Brier {row.brier_score:.4f}, ROC-AUC {row.roc_auc:.4f}." for row in tests.itertuples())
-    reliability = []
-    for stage, group in comparison.groupby("stage"):
-        best = group.sort_values("cv_brier_score").iloc[0]
-        reliability.append(f"For {stage}, {best['model']} has the lowest mean CV Brier score ({best['cv_brier_score']:.4f}).")
-    top_tables = "\n\n".join(
-        f"### {stage}\n\n" + markdown_table(group.head(10)[["feature", "importance_mean", "importance_std"]])
-        for stage, group in importance.groupby("stage", sort=False))
-    report = f"""# AI-Based Student Performance Prediction Using Probability
+def statistical_analysis(frame: pd.DataFrame, y: pd.Series, schema: str) -> dict:
+    """Describe observed data without filling gaps or implying causal effects."""
+    features = SCHEMAS[schema]["features"]
+    observed = frame[features].copy()
+    observed["pass"] = y
+    summaries = frame[features].agg(["count", "mean", "std", "min", "median", "max"]).T
+    summaries.index.name = "feature"
+    by_outcome = observed.groupby("pass")[features].agg(["mean", "std", "count"])
+    by_outcome.index = by_outcome.index.map({0: "Fail", 1: "Pass"})
+    counts = []
+    for feature, edges in zip(features, SCHEMAS[schema]["bins"]):
+        values = frame[feature]
+        categories = np.digitize(values.fillna(0), edges)
+        for category in range(4):
+            mask = values.notna() & (categories == category)
+            n = int(mask.sum())
+            counts.append({"feature": feature, "interval": bin_label(edges, category),
+                           "students": n, "passes": int(y[mask].sum()),
+                           "observed_pass_rate": float(y[mask].mean()) if n else np.nan})
+    return {"summary": summaries, "by_outcome": by_outcome,
+            "pearson": observed.corr(method="pearson"),
+            "spearman": observed.corr(method="spearman"),
+            "conditional": pd.DataFrame(counts)}
+
+
+def write_reports(bundle: dict, output: Path) -> None:
+    output.mkdir(parents=True, exist_ok=True)
+    figures = output / "figures"
+    figures.mkdir(exist_ok=True)
+    for name, key in [("model_comparison", "comparison"), ("cv_fold_metrics", "fold_metrics"),
+                      ("test_metrics", "test_metrics")]:
+        bundle[key].to_csv(output / f"{name}.csv", index=False)
+    for name, frame in bundle["statistics"].items():
+        frame.to_csv(output / f"{name}.csv", index=name != "conditional")
+    metadata = {**bundle["metadata"], "selected_model": bundle["model_name"],
+                "train_indices": bundle["train_indices"].tolist(),
+                "test_indices": bundle["test_indices"].tolist(),
+                "features": SCHEMAS[bundle["schema"]]["features"],
+                "selection": "Lowest training-only five-fold CV Brier score; log loss breaks ties",
+                "calibration": "Nested five-fold sigmoid calibration, ensemble=False",
+                "schema_version": 2}
+    (output / "experiment_metadata.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
+    sns.set_theme(style="whitegrid", palette="deep")
+    fig, ax = plt.subplots(figsize=(6, 5))
+    ConfusionMatrixDisplay.from_predictions(bundle["test_y"], bundle["test_probability"] >= .5,
+                                           labels=[0, 1], display_labels=["Fail", "Pass"], ax=ax, colorbar=False)
+    ax.set_title("Held-out results · threshold 0.50")
+    fig.tight_layout()
+    fig.savefig(figures / "confusion_matrix.png", dpi=160)
+    plt.close(fig)
+    fig, ax = plt.subplots(figsize=(6, 5))
+    RocCurveDisplay.from_predictions(bundle["test_y"], bundle["test_probability"], ax=ax, name="Selected Bayes")
+    ax.plot([0, 1], [0, 1], "--", color="gray")
+    fig.tight_layout()
+    fig.savefig(figures / "roc_curve.png", dpi=160)
+    plt.close(fig)
+    fig, ax = plt.subplots(figsize=(6, 5))
+    ax.plot([0, 1], [0, 1], "--", color="gray", label="Ideal")
+    for label, p in [("Selected model", bundle["test_probability"]), ("Raw Bayes", bundle["raw_test_probability"])]:
+        actual, predicted = calibration_curve(bundle["test_y"], p, n_bins=5, strategy="quantile")
+        ax.plot(predicted, actual, marker="o", label=label)
+    ax.set(xlabel="Mean predicted pass probability", ylabel="Observed pass fraction",
+           xlim=(0, 1), ylim=(0, 1), title="Held-out calibration · 5 quantile bins")
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(figures / "calibration_curve.png", dpi=160)
+    plt.close(fig)
+    fig, ax = plt.subplots(figsize=(7, 6))
+    sns.heatmap(bundle["statistics"]["spearman"], annot=True, fmt=".2f", vmin=-1, vmax=1,
+                cmap="vlag", square=True, ax=ax)
+    ax.set_title("Spearman correlation · training data")
+    fig.tight_layout()
+    fig.savefig(figures / "correlation.png", dpi=160)
+    plt.close(fig)
+    report = research_report(bundle)
+    (output / "research_report.md").write_text(report, encoding="utf-8")
+
+
+def research_report(bundle: dict) -> str:
+    meta = bundle["metadata"]
+    metrics = bundle["test_metrics"].iloc[0]
+    return f"""# {TITLE}
 
 ## Abstract
+This project estimates pass and fail probabilities using categorical Naive Bayes.
+The target is explicitly defined as {meta['target_definition']}
+The primary model is {bundle['model_name']}; it is selected by training-only cross-validation Brier score.
+This version replaces the earlier dropout project. Dropout outcomes are not reused or renamed.
 
-This reproducible experiment estimates the probability of the recorded dropout outcome, using official UCI records and two feature-availability stages. Four classifier families were compared using training-only nested calibration and cross-validation. Gender and second-semester information were excluded from prediction. The held-out results are:
-
-{summary}
-
-The first-semester minus enrollment test average-precision difference is {delta:+.4f}. These are retrospective results from one source dataset, not evidence that an intervention works or that probabilities transfer to another institution.
-
-## Introduction
-
-Universities need timely evidence for offering academic and financial support. A probability can communicate graded uncertainty better than a binary label, but its meaning depends on the outcome definition and evaluation population. This project treats dropout prediction as a research decision-support task, with human review and institutional validation required before use.
-
-## Problem statement
-
-The target is **Dropout = 1; Graduate or Enrolled = 0**. Thus a probability estimates the recorded dropout label under this definition. It does not directly estimate every type of academic difficulty, intelligence, potential, or inevitable future dropout. Enrolled students have unresolved final outcomes; merging them into class 0 can introduce label uncertainty and censoring.
-
-## Aim
-
-Build and evaluate an anonymous, calibrated early-warning research prototype for supportive student services.
-
-## Objectives
-
-- Compare information available at enrollment with information available after semester one.
-- Compare four probabilistic classifiers using reproducible training-only selection.
-- Measure ranking, classification, probability quality, and subgroup performance.
-- Explain global predictive associations and communicate deployment limitations.
+## Aim and objectives
+Predict pass/fail probabilities, explain Bayes' theorem, analyze mean, sample standard deviation and correlation,
+and let users change factors to observe prediction changes.
+The four-factor CSV workflow uses attendance percentage, weekly study hours, previous marks and assignment scores.
+The bundled real-data demonstration uses the closest verifiable UCI measurements and discloses the differences.
 
 ## Research questions
+1. How are observed student factors associated with passing?
+2. Does sigmoid calibration improve Naive Bayes probability quality on training folds?
+3. How do probabilities change when one entered factor changes?
+4. What data is needed to validate the four-factor model for a local institution?
 
-{chr(10).join(f'{i}. {question}' for i, question in enumerate(RESEARCH_QUESTIONS, 1))}
+## Dataset and target
+Source: {meta['source']}.
+Rows: {meta['rows']}; passes: {meta['pass_count']}; fails: {meta['fail_count']}.
+Duplicates removed: {meta['duplicates_removed']}; missing predictor entries: {meta['missing_inputs']}.
+SHA-256: {meta['sha256']}.
+Schema: {bundle['schema']}. {SCHEMAS[bundle['schema']]['limitation']}
+The official demonstration uses only mathematics records, avoiding cross-subject student overlap.
+Its pass mark is a declared project convention of 10/20. Custom data defaults to 50/100, configurable before training.
+No synthetic training records are generated. Final marks are used only to construct labels, never as predictors.
 
-## Dataset description
+## Feature selection and timing
+Predictors: {', '.join(SCHEMAS[bundle['schema']]['features'])}.
+Gender, identifiers, final marks and other columns are excluded from model input.
+G1 and G2 are prior-period grades, so the UCI model is a late-course prediction after G2, not an enrollment forecast.
+The source does not establish an absence snapshot at that point: absences may include later information.
+Consequently these are retrospective research results, not proof of prospective early-warning performance.
+Local records must capture all predictors before the target assessment; assignment scores should be genuinely prior work.
 
-The UCI dataset represents students in Portuguese higher education and contains enrollment and semester information. Its original outcomes are dropout, enrolled, and graduate, recorded at the normal course duration. The source lists 4,424 rows, 36 predictors, no missing values, and a CC BY 4.0 license [1].
-
-This run read **{metadata['rows_before']} rows**, removed **{metadata['duplicates_removed']} exact duplicate records**, and retained **{metadata['rows']} rows**. Original outcome counts: {metadata['original_target_counts']}. Binary counts: {metadata['binary_target_counts']}. Missing selected predictor values: {metadata['missing_predictor_values']}. Training size: {metadata['train_size']}; test size: {metadata['test_size']}. No synthetic data were used.
-
-Actual download source: {metadata['source']['url']}
-
-Dataset SHA-256: `{metadata['sha256']}`. This identifies the exact bytes used. No names, contact information, or identifiers are collected in the dashboard. Published attributes may still permit indirect identification, so anonymity is not a universal privacy guarantee.
-
-## Feature selection
-
-Enrollment uses these 14 requested variables: {', '.join(ENROLLMENT)}.
-
-The first-semester stage adds: {', '.join(SEMESTER)}.
-
-**Timing assumption:** the source describes enrollment information, but does not provide per-field collection timestamps. Debtor, tuition status, scholarship status, and economic indicators must reflect the prediction-time snapshot. If these fields were updated after enrollment, the enrollment experiment could overestimate real early prediction. Verify timestamps or omit/retrain those fields before operational use. Semester-one features require completion of that semester. No second-semester variable is permitted by either pipeline's column allowlist.
-
-**Gender is excluded from prediction** to avoid direct use of this protected attribute, and retained only for auditing. Exclusion cannot eliminate proxy effects or establish fairness. The source's binary codes also do not represent all gender identities. Other available variables are omitted to maintain the specified, compact feature set.
-
-## Proposed methodology
-
-Validate the required schema and labels, normalize column whitespace, reject malformed or infinite numeric values, remove exact duplicates before splitting, then preserve feature missingness until pipeline imputation. Median imputation is fitted only on the relevant training fold. Logistic Regression and Gaussian Naive Bayes also use standard scaling within that pipeline; tree models do not require scaling. No oversampling occurs before or after splitting.
-
-Logistic Regression, Random Forest, and HistGradientBoosting use built-in balanced class weights. Gaussian Naive Bayes has no class_weight parameter and uses empirical training priors; its independence assumption may be unrealistic. Calibration is fitted against the unbalanced, observed training distribution, without imposing equal class priors on the calibrator.
-
-## Probability model explanation
-
-The output is an estimate of P(recorded Dropout = 1 given selected features). Logistic regression applies a logistic link to a weighted feature sum; Naive Bayes combines class-conditional densities; forest and boosting models learn nonlinear relationships. Sigmoid calibration fits p = 1 / (1 + exp(A f + B)), where f is a base-model score and A and B are learned from out-of-fold training scores. In a well-calibrated population, approximately 70% of cases assigned probabilities near 0.70 would have the target outcome. This is a group-frequency interpretation, not individual certainty [2].
+## Probability methodology
+Each input enters one of four predefined intervals. The study-time code is treated as categorical.
+The model estimates a training prior P(Pass) and, for each factor, P(interval | Pass) and P(interval | Fail).
+Laplace smoothing uses (class-and-interval count + 1)/(class count + 4).
+Under conditional independence, J(c) = P(c) × product of P(interval_j | c).
+Bayes' theorem gives P(Pass | inputs) = J(Pass)/(J(Pass) + J(Fail)).
+P(Fail | inputs) = 1 - P(Pass | inputs).
+Calculations use log space for numerical stability. The app reproduces every likelihood for an entered profile.
+If calibrated Bayes is selected, sigmoid calibration adjusts the raw posterior; the app labels both separately.
+The model is deliberately Bayesian; it is not selected against unrelated classifiers.
+Fixed intervals improve interpretability but lose within-interval detail, so some slider changes leave the result unchanged.
+Related grades violate the conditional independence approximation and can exaggerate certainty.
 
 ## Experimental design
+Seed 42; stratified 80/20 split: {len(bundle['train_indices'])} training and {len(bundle['test_indices'])} testing rows.
+Both raw Bayes and sigmoid-calibrated Bayes use five outer training folds.
+Calibration uses five inner folds. Missing categories use most-frequent imputation fitted inside each fold.
+Selection minimizes mean CV Brier score, with log loss as tie breaker, before touching test labels.
+The final models remain fitted only to the training portion; the test set is not used for refitting.
+A prevalence-only baseline uses the training pass rate.
+The default decision threshold is 0.50; dashboard changes do not alter the fixed report metrics.
 
-A single stratified 80/20 split (random_state=42) is reused for both stages. All four candidates undergo **five outer stratified folds**, with **five inner stratified folds** in CalibratedClassifierCV(method='sigmoid', ensemble=False). Inner out-of-fold scores fit the calibrator; the base pipeline is then refitted on that outer training partition. The outer validation fold never participates in preprocessing, calibration, or fitting. The final selected candidate is similarly calibrated using training data only.
+## Results
+Selected model: {bundle['model_name']}.
+Held-out accuracy: {metrics['accuracy']:.3f}; pass precision: {metrics['pass_precision']:.3f};
+pass recall: {metrics['pass_recall']:.3f}; fail recall: {metrics['fail_recall']:.3f};
+pass F1: {metrics['pass_f1']:.3f}; ROC-AUC: {metrics['roc_auc']:.3f};
+pass average precision: {metrics['pass_average_precision']:.3f};
+Brier score: {metrics['brier_score']:.3f}; log loss: {metrics['log_loss']:.3f}.
+See model_comparison.csv for CV means and standard deviations, cv_fold_metrics.csv for every fold,
+and test_metrics.csv for selected, raw and prior-only comparisons.
+Calibration is measured rather than assumed; small held-out samples make reliability curves uncertain.
 
-Selection uses mean outer-fold average precision, then recall, then lower Brier score, then F1, in that exact lexicographic order. Secondary measures break exact ties; there is no post-hoc weighted scoring rule. Hyperparameters are fixed in src/modeling.py. Both selections are frozen before the test set is evaluated. The test set is never used to choose algorithms, features, calibration methods, or thresholds. Reported outer CV scores can still have model-selection optimism; the held-out evaluation addresses this for the frozen selections.
+## Statistical analysis
+All exploratory statistics use the training subset. summary.csv reports count, mean, sample standard deviation
+(ddof=1), minimum, median and maximum. by_outcome.csv separates pass/fail groups.
+Pearson and Spearman correlation matrices include binary pass (1) / fail (0).
+The mean/std of ordinal study-time codes describe codes, not hours; Spearman is the preferred ordinal summary.
+conditional.csv gives observed P(Pass | factor interval) with its denominator.
+These single-factor observed frequencies differ from the smoothed model likelihood P(interval | class).
+Missing observations are excluded pairwise from descriptive statistics, not filled with invented measurements.
+Correlations and what-if curves show associations and model sensitivity, not causal effects.
 
-The decision threshold is 0.50. Descriptive bands are Low below 0.30, Medium from 0.30 to below 0.60, and High from 0.60. Bands do not change when the dashboard threshold changes. Any operational threshold needs prospective institutional validation and an assessment of missed cases, false alarms, support capacity, and student preferences.
+## Ethics and limitations
+The dataset is small, historical and from two Portuguese secondary schools. It does not establish validity
+for universities or Pakistani institutions. Gender exclusion does not remove proxy bias.
+No completed subgroup fairness audit is claimed in this revision.
+Predicted probabilities are uncertain estimates, not guaranteed outcomes, intelligence or potential.
+A user can receive a likely-fail label and still pass. Use human review and supportive action.
+Uploads must be anonymous; the app processes custom records in session memory and does not write them to disk.
+The hosting provider still operates the network infrastructure.
+Custom data must use one row per student: repeated students require grouped splitting beyond this prototype.
+Users must verify outcome completeness, source quality, collection time, sample size and local pass criteria.
 
-## Model comparison results
-
-PR-AUC is implemented as **average precision (AP)**, the stepwise precision-recall integral, rather than trapezoidal interpolation. Accuracy is secondary. Standard deviations across five folds are saved alongside every CV metric and are not confidence intervals.
-
-{markdown_table(comparison[['stage', 'model', 'cv_pr_auc', 'cv_recall', 'cv_brier_score', 'cv_f1', 'selected']])}
-
-### Final held-out evaluation
-
-{markdown_table(tests[['stage', 'model', 'accuracy', 'precision', 'recall', 'f1', 'roc_auc', 'pr_auc', 'brier_score', 'log_loss']])}
-
-The test first-semester AP change is {delta:+.4f}. This is a descriptive paired-population comparison, not a significance claim. Full metrics, CV fold results, and 400-resample percentile bootstrap intervals are separate CSVs. Bootstrap intervals condition on the fixed fitted model and one split; they do not include training variability, model selection, institutional clustering, or temporal shift.
-
-Accuracy is the proportion correctly classified. Precision is the fraction of alerts that are recorded dropouts; recall is the fraction of dropouts detected. F1 balances precision and recall. ROC-AUC measures ranking across both classes; AP emphasizes retrieval of dropouts. Brier score is mean squared probability error; log loss penalizes confident errors. Lower Brier/log loss is better. A constant training-prevalence predictor provides context:
-
-{markdown_table(tests[['stage', 'baseline_pr_auc', 'baseline_brier_score']])}
-
-## Calibration results
-
-{' '.join(reliability)} The AP selection rule may choose a different model. Brier score and log loss reflect both discrimination and calibration; neither alone proves calibrated probabilities [2]. Reliability diagrams and bin counts should be read together, particularly for sparsely populated bins. Calibration is an estimated correction and may help or worsen holdout results.
-
-{markdown_table(comparison[['stage', 'model', 'cv_raw_brier_score', 'cv_brier_score', 'cv_raw_log_loss', 'cv_log_loss']])}
-
-{markdown_table(tests[['stage', 'raw_brier_score', 'brier_score', 'raw_log_loss', 'log_loss']])}
-
-Before/after comparisons use the same fitted base model with its calibration mapping disabled/enabled, without test-dependent refitting. The first-semester figure is below; both stages have their own figure directories.
-
-![First-semester calibration](figures/calibration_curve.png)
-
-## Fairness results
-
-The selected model for each stage is audited on the test set at threshold 0.50. Recall has actual positives as its denominator; false-positive rate uses actual negatives. Positive prediction rate and mean predicted risk use all students in that group. Undefined rates remain missing. Brier score and observed prevalence provide additional context for probability reliability.
-
-{markdown_table(fairness)}
-
-Differences warrant investigation and **do not automatically prove discrimination**. Equal aggregate performance also does not prove fairness. Base rates, measurement differences, sample sizes, label uncertainty, and omitted confounders may contribute. These point estimates cannot establish equal probability reliability across relevant groups; subgroup calibration curves, uncertainty estimates, intersectional audits, and local stakeholder input are future work.
-
-## Global explainability
-
-Permutation importance shuffles each predictor on the held-out data and measures the decrease in AP over ten repetitions (seed 42). The error bars are repeat standard deviations, not confidence intervals. Negative values indicate no reliable gain on that permutation experiment. Correlated predictors may mask each other's importance. These diagnostic test-set analyses were not fed back into model selection.
-
-{top_tables}
-
-Importance describes global predictive association, not individual explanations, intervention effects, or causation. A financial feature's importance must never justify penalizing a financially vulnerable student.
-
-![First-semester importance](figures/feature_importance.png)
-![First-semester ROC](figures/roc_curve.png)
-![First-semester confusion matrix](figures/confusion_matrix.png)
-
-## Ethical considerations
-
-Use the system to offer support, with meaningful human review before every intervention. Students should have an understandable explanation, an opportunity to correct inputs, and a way to contest decisions. Avoid automated exclusion or denial of scholarships. Collect only necessary information, restrict access, set retention periods, and assess privacy risk before any institutional deployment. The local prototype does not store submitted student records; session state is temporary and no institutional security controls are implemented.
-
-UNESCO's recommendation provides a rights-centered basis for human oversight, privacy, fairness, and accountability in AI [3]. Institutional governance should identify who is responsible for alerts, how harmful outcomes are reported, and when use must stop.
-
-## Limitations
-
-- Retrospective single-source data do not establish performance for future cohorts or another university. Random splitting is not a temporal or institution-held-out validation.
-- Portuguese and Pakistani contexts differ in grading, fees, admissions, support systems, economic conditions, and outcome definitions. Directly substituting Pakistani marks or macroeconomic values is unsupported. Local validation and likely retraining/recalibration are necessary.
-- Enrolled students' unresolved outcomes, unknown per-field timing, possible indirect identification, and exclusion of unavailable causal factors limit conclusions.
-- Sigmoid calibration does not guarantee accuracy for an individual, subgroup, or shifted population. Probability displays have estimation uncertainty.
-- Fixed hyperparameters and four algorithms form a limited search. No causal study, intervention trial, or prospective benefit analysis was conducted.
-- Group diagnostics cover only the recorded binary Gender attribute; this is not a complete fairness assessment.
-
-## Conclusion
-
-The project produces reproducible dropout probabilities for two information stages, with separate calibration, model selection, and test evaluation. The selected models and empirical metrics above answer the ranking comparison; the Brier and reliability diagnostics address probability quality. Global importance identifies associated predictors, while fairness diagnostics show questions that need further study. A model trained internationally cannot be responsibly deployed in Pakistan without local validation and human governance.
-
-## Future work
-
-Collect consented, time-stamped local data; define an outcome horizon and resolve censoring; evaluate across cohorts and institutions; compare recalibration methods inside training validation; quantify subgroup uncertainty; measure drift in features, outcome prevalence and calibration; validate a supportive threshold; and prospectively evaluate benefits and harms of interventions. Retrain only under a documented review process.
-
-## Reproducibility
-
-Generated at {metadata['trained_at_utc']}. Python {metadata['python']}; libraries: {metadata['versions']}. Run `python train.py` to reproduce outputs from the cached data. The exact installed environment is in requirements-lock.txt. Source data SHA-256 and run metadata are in experiment_metadata.json. Only load trusted joblib files.
+## Conclusion and future work
+The application demonstrates pass/fail Bayes prediction, transparent conditional probability and descriptive statistics.
+Collect a representative, consented four-factor dataset for the intended institution, validate on a future cohort,
+assess subgroup performance and probability calibration, and choose an operational threshold with educators.
+Do not invent assignment or attendance measurements to make the UCI schema appear to match the proposal.
 
 ## References
-
-1. UCI Machine Learning Repository. *Predict Students’ Dropout and Academic Success*. https://doi.org/10.24432/C5MC89 (dataset, CC BY 4.0).
-2. Scikit-learn. *Probability calibration*. https://scikit-learn.org/stable/modules/calibration.html
-3. UNESCO. *Recommendation on the Ethics of Artificial Intelligence*. https://www.unesco.org/en/articles/recommendation-ethics-artificial-intelligence
+- Cortez, P. (2008). Student Performance. UCI Machine Learning Repository. https://doi.org/10.24432/C5TG7T (CC BY 4.0).
+- Scikit-learn Naive Bayes: https://scikit-learn.org/stable/modules/naive_bayes.html
+- Scikit-learn calibration: https://scikit-learn.org/stable/modules/calibration.html
+- UNESCO Recommendation on the Ethics of AI: https://www.unesco.org/en/articles/recommendation-ethics-artificial-intelligence
 """
-    (REPORTS / "research_report.md").write_text(report, encoding="utf-8")

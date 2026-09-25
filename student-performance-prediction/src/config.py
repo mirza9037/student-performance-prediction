@@ -1,32 +1,36 @@
-"""Shared paths and explicitly allowed, stage-specific predictors."""
+"""Dataset contracts and paths for the pass/fail probability project."""
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-DATA_PATH = ROOT / "data" / "raw" / "uci_student_dropout.csv"
+DATA_PATH = ROOT / "data" / "raw" / "student-mat.csv"
 MODEL_PATH = ROOT / "models" / "model_bundle.joblib"
 REPORTS = ROOT / "reports"
 FIGURES = REPORTS / "figures"
 SEED = 42
-FOLDS = 5
-THRESHOLD = 0.50
-DATA_URL = "https://archive.ics.uci.edu/static/public/697/data.csv"
-ZIP_URL = "https://archive.ics.uci.edu/static/public/697/predict%2Bstudents%2Bdropout%2Band%2Bacademic%2Bsuccess.zip"
-ENROLLMENT = [
-    "Application order", "Previous qualification (grade)", "Admission grade",
-    "Daytime/evening attendance", "Displaced", "Educational special needs",
-    "Debtor", "Tuition fees up to date", "Scholarship holder", "Age at enrollment",
-    "International", "Unemployment rate", "Inflation rate", "GDP",
-]
-SEMESTER = [f"Curricular units 1st semester ({name})" for name in
-            ["credited", "enrolled", "evaluations", "approved", "grade", "without evaluations"]]
-STAGES = {"enrollment": ENROLLMENT, "first_semester": ENROLLMENT + SEMESTER}
-STAGE_LABELS = {"enrollment": "Enrollment", "first_semester": "First-Semester Early Warning"}
-BINARY_FEATURES = ["Daytime/evening attendance", "Displaced", "Educational special needs",
-                   "Debtor", "Tuition fees up to date", "Scholarship holder", "International"]
-RESEARCH_QUESTIONS = [
-    "Which academic and enrollment factors most strongly predict student risk?",
-    "Which model gives the most reliable probabilities?",
-    "Does first-semester information improve prediction over enrollment information?",
-    "Are the model’s predictions equally reliable across relevant student groups?",
-    "Can a model trained on international data be responsibly used in Pakistan without local validation?",
-]
+DATA_URL = "https://archive.ics.uci.edu/static/public/320/student%2Bperformance.zip"
+TITLE = "AI-Based Student Performance Prediction Using Probability"
+
+# Fixed intervals are declared in advance, never learned from test data.
+SCHEMAS = {
+    "uci": {
+        "name": "UCI mathematics research dataset",
+        "features": ["absences", "studytime", "G1", "G2"],
+        "labels": ["School absences", "Weekly study-time band", "First-period marks (0–20)", "Second-period marks (0–20)"],
+        "bounds": [(0, 93), (1, 4), (0, 20), (0, 20)],
+        "bins": [[3, 10, 20], [1.5, 2.5, 3.5], [5, 10, 15], [5, 10, 15]],
+        "defaults": [4, 2, 12, 12],
+        "target": "G3", "pass_mark": 10.0, "target_max": 20.0,
+        "limitation": "UCI records absences and study-time bands. It has no attendance percentage, exact study hours, or assignment scores. Previous marks are G1 and G2; neither is an assignment score.",
+    },
+    "custom": {
+        "name": "Your four-factor dataset",
+        "features": ["attendance", "study_hours", "previous_marks", "assignment_score"],
+        "labels": ["Attendance (%)", "Study hours per week", "Previous marks (%)", "Assignment performance (%)"],
+        "bounds": [(0, 100), (0, 168), (0, 100), (0, 100)],
+        "bins": [[60, 75, 90], [5, 10, 20], [40, 60, 80], [40, 60, 80]],
+        "defaults": [80, 10, 65, 70],
+        "target": "final_marks", "pass_mark": 50.0, "target_max": 100.0,
+        "limitation": "Use one anonymous row per student. All four inputs must be recorded before the final assessment. Model quality depends on the source and representativeness of your records.",
+    },
+}
+STUDY_BANDS = {1: "Less than 2 hours/week", 2: "2–5 hours/week", 3: "5–10 hours/week", 4: "More than 10 hours/week"}

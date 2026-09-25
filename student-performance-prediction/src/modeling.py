@@ -1,81 +1,105 @@
-"""Training-only model comparison with nested probability calibration."""
+"""Interpretable Naive Bayes with fixed intervals and optional calibration."""
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+from scipy.special import logsumexp
+from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.calibration import CalibratedClassifierCV
-from sklearn.compose import ColumnTransformer
-from sklearn.ensemble import HistGradientBoostingClassifier, RandomForestClassifier
 from sklearn.impute import SimpleImputer
-from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import StratifiedKFold
-from sklearn.naive_bayes import GaussianNB
+from sklearn.naive_bayes import CategoricalNB
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
-
-from src.config import FOLDS, SEED
-from src.evaluation import calculate_metrics
-
-MODEL_NAMES = ["Logistic Regression", "Gaussian Naive Bayes", "Random Forest", "HistGradientBoosting"]
+from src.config import SCHEMAS, SEED
 
 
-def make_model(name: str, features: list[str]) -> CalibratedClassifierCV:
-    """Wrap the entire preprocessing pipeline in inner, stratified 5-fold calibration."""
-    estimators = {
-        "Logistic Regression": LogisticRegression(class_weight="balanced", max_iter=2000, random_state=SEED),
-        "Gaussian Naive Bayes": GaussianNB(),
-        "Random Forest": RandomForestClassifier(n_estimators=120, min_samples_leaf=3, class_weight="balanced", n_jobs=1, random_state=SEED),
-        "HistGradientBoosting": HistGradientBoostingClassifier(max_iter=120, max_leaf_nodes=15, l2_regularization=1.0,
-                                                              class_weight="balanced", early_stopping=False, random_state=SEED),
-    }
-    if name not in estimators:
-        raise ValueError(f"Unknown model: {name}")
-    steps = [("imputer", SimpleImputer(strategy="median", keep_empty_features=True))]
-    if name in {"Logistic Regression", "Gaussian Naive Bayes"}:
-        steps.append(("scaler", StandardScaler()))
-    preprocess = ColumnTransformer([("numeric", Pipeline(steps), features)], remainder="drop")
-    pipeline = Pipeline([("preprocess", preprocess), ("classifier", estimators[name])])
-    # ensemble=False obtains out-of-fold calibration scores, then refits the base
-    # pipeline on its full training partition. No outer validation/test row is used.
-    return CalibratedClassifierCV(pipeline, method="sigmoid", ensemble=False,
-                                  cv=StratifiedKFold(FOLDS, shuffle=True, random_state=SEED), n_jobs=1)
+class FixedBins(TransformerMixin, BaseEstimator):
+    """Select the feature allowlist, validate values, and assign fixed intervals."""
+
+    def __init__(self, schema: str = "uci"):
+        self.schema = schema
+
+    def fit(self, X: pd.DataFrame, y=None):
+        self.feature_names_in_ = np.array(SCHEMAS[self.schema]["features"], dtype=object)
+        self.n_features_in_ = len(self.feature_names_in_)
+        return self
+
+    def transform(self, X: pd.DataFrame) -> np.ndarray:
+        spec = SCHEMAS[self.schema]
+        values = X.loc[:, spec["features"]].to_numpy(dtype=float)
+        if np.isinf(values).any():
+            raise ValueError("Infinite input values are not allowed.")
+        for j, (lo, hi) in enumerate(spec["bounds"]):
+            finite = values[:, j][~np.isnan(values[:, j])]
+            if ((finite < lo) | (finite > hi)).any():
+                raise ValueError(f"{spec['features'][j]} must be between {lo} and {hi}.")
+            if self.schema == "uci" and (finite != np.floor(finite)).any():
+                raise ValueError("UCI inputs must be whole numbers or valid study-time bands.")
+        return np.column_stack([
+            np.where(np.isnan(values[:, j]), np.nan, np.digitize(values[:, j], edges))
+            for j, edges in enumerate(spec["bins"])
+        ])
 
 
-def compare_models(X: pd.DataFrame, y: pd.Series, features: list[str], stage: str) -> tuple[pd.DataFrame, pd.DataFrame, str]:
-    """Evaluate candidates in outer CV; select lexicographically by AP, recall, Brier, F1."""
-    rows, fold_rows = [], []
-    outer = StratifiedKFold(FOLDS, shuffle=True, random_state=SEED)
-    for name in MODEL_NAMES:
-        calibrated_scores, raw_scores = [], []
-        for fold, (fit, valid) in enumerate(outer.split(X, y), start=1):
-            model = make_model(name, features)
-            model.fit(X.iloc[fit], y.iloc[fit])
-            probability = model.predict_proba(X.iloc[valid])[:, 1]
-            raw_probability = model.calibrated_classifiers_[0].estimator.predict_proba(X.iloc[valid])[:, 1]
-            scores = calculate_metrics(y.iloc[valid], probability)
-            raw = calculate_metrics(y.iloc[valid], raw_probability)
-            calibrated_scores.append(scores)
-            raw_scores.append(raw)
-            fold_rows.append({"stage": stage, "model": name, "fold": fold, **scores,
-                              "raw_brier_score": raw["brier_score"], "raw_log_loss": raw["log_loss"]})
-            print(f"  {stage} | {name} | fold {fold}/{FOLDS} | AP={scores['pr_auc']:.4f}", flush=True)
-        row = {"stage": stage, "model": name}
-        for metric in calibrated_scores[0]:
-            values = [score[metric] for score in calibrated_scores]
-            row[f"cv_{metric}"] = float(np.mean(values))
-            row[f"cv_{metric}_std"] = float(np.std(values, ddof=1))
-        row["cv_raw_brier_score"] = float(np.mean([score["brier_score"] for score in raw_scores]))
-        row["cv_raw_log_loss"] = float(np.mean([score["log_loss"] for score in raw_scores]))
-        rows.append(row)
-    comparison = pd.DataFrame(rows).sort_values(
-        ["cv_pr_auc", "cv_recall", "cv_brier_score", "cv_f1"], ascending=[False, False, True, False], kind="stable"
-    ).reset_index(drop=True)
-    comparison["selected"] = comparison.index == 0
-    return comparison, pd.DataFrame(fold_rows), str(comparison.iloc[0]["model"])
+def make_model(schema: str, calibrated: bool = False):
+    """Impute within each fold; Laplace smoothing keeps empty bins possible."""
+    model = Pipeline([
+        ("bins", FixedBins(schema)),
+        ("imputer", SimpleImputer(strategy="most_frequent", keep_empty_features=True)),
+        ("bayes", CategoricalNB(alpha=1.0, min_categories=[4] * 4)),
+    ])
+    if calibrated:
+        return CalibratedClassifierCV(
+            model, method="sigmoid", ensemble=False,
+            cv=StratifiedKFold(5, shuffle=True, random_state=SEED), n_jobs=1,
+        )
+    return model
 
 
-def risk_band(probability: float) -> str:
-    """Descriptive probability bands, independent of the operational threshold."""
-    if not np.isfinite(probability) or not 0 <= probability <= 1:
-        raise ValueError("Risk probability must be a finite number between 0 and 1.")
-    return "Low" if probability < 0.30 else "Medium" if probability < 0.60 else "High"
+def pass_probability(model, X: pd.DataFrame) -> np.ndarray:
+    """Read the positive-class column explicitly: 1 always means pass."""
+    return model.predict_proba(X)[:, list(model.classes_).index(1)]
+
+
+def classification(probability: float, threshold: float = 0.5) -> str:
+    return "Likely pass" if probability >= threshold else "Likely fail"
+
+
+def bin_label(edges: list, index: int) -> str:
+    if index == 0:
+        return f"< {edges[0]}"
+    if index == len(edges):
+        return f"≥ {edges[-1]}"
+    return f"{edges[index - 1]} to < {edges[index]}"
+
+
+def bayes_breakdown(raw_model: Pipeline, row: pd.DataFrame, schema: str) -> dict:
+    """Reconstruct the exact raw posterior from priors and conditional counts."""
+    categories = raw_model[:-1].transform(row).astype(int)[0]
+    nb = raw_model.named_steps["bayes"]
+    terms = []
+    log_joint = nb.class_log_prior_.copy()
+    for j, category in enumerate(categories):
+        log_likelihood = nb.feature_log_prob_[j][:, category]
+        log_joint += log_likelihood
+        terms.append({
+            "Factor": SCHEMAS[schema]["labels"][j],
+            "Interval": bin_label(SCHEMAS[schema]["bins"][j], category),
+            "P(interval | Fail)": float(np.exp(log_likelihood[0])),
+            "P(interval | Pass)": float(np.exp(log_likelihood[1])),
+        })
+    posterior = np.exp(log_joint - logsumexp(log_joint))
+    return {"terms": pd.DataFrame(terms), "priors": np.exp(nb.class_log_prior_),
+            "joint": np.exp(log_joint), "posterior": posterior}
+
+
+def what_if(model, row: pd.DataFrame, schema: str, feature: str) -> pd.DataFrame:
+    """Vary one input while holding all other entered values fixed."""
+    spec = SCHEMAS[schema]
+    j = spec["features"].index(feature)
+    lo, hi = spec["bounds"][j]
+    grid = np.arange(lo, hi + 1, dtype=float)
+    scenarios = pd.concat([row] * len(grid), ignore_index=True)
+    scenarios[feature] = grid
+    return pd.DataFrame({spec["labels"][j]: grid,
+                         "Pass probability": pass_probability(model, scenarios)})

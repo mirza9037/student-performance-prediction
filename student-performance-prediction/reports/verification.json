@@ -1,0 +1,12 @@
+{
+  "checked_at_utc": "2026-09-25T11:38:14.9380830Z",
+  "project": "Pass/fail Naive Bayes revision",
+  "tests": "20 passed",
+  "pytest_seconds": 12.4,
+  "syntax": "passed",
+  "pip_check": "No broken requirements found",
+  "streamlit_app_test": "All five pages, both entrypoints, custom four-factor model and input changes passed",
+  "browser_preview": "Root entrypoint rendered successfully at localhost:8502",
+  "dataset": "Official UCI mathematics, 395 records, SHA-256 recorded",
+  "live_cloud": "Not deployed; Streamlit repository access still requires verification"
+}
