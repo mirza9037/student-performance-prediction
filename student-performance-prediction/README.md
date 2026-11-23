@@ -1,5 +1,7 @@
 # AI-Based Student Performance Prediction Using Probability
 
+**Live app: [studperf.streamlit.app](https://studperf.streamlit.app/)**. The research evidence page provides downloadable results.
+
 A Python research application that applies **Bayes' theorem** to estimate a student's probability of passing or failing.
 
 ## What the app does

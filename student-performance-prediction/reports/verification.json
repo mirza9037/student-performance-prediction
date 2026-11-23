@@ -1,12 +1,12 @@
 {
-  "checked_at_utc": "2026-11-23T10:47:16.3426320Z",
+  "checked_at_utc": "2026-11-23T10:53:14.3826276Z",
   "project": "Research dashboard with aggregate uncertainty and evidence downloads",
-  "tests": "24 passed",
-  "pytest_seconds": 13.63,
+  "tests": "25 passed",
+  "pytest_seconds": 14.72,
   "syntax": "passed",
   "streamlit_app_test": "Six pages, both entrypoints, custom dataset research/export, probability input changes",
   "browser_preview": "Research evidence page and experiment diagram rendered at localhost:8502",
   "dataset": "Official UCI mathematics, 395 records",
   "uncertainty": "95% Wilson intervals and 2000 paired stratified bootstrap resamples",
-  "live_cloud": "Not verified in this session; Streamlit workspace requires sign-in"
+  "live_cloud": "https://studperf.streamlit.app/ verified without sign-in: Prediction, Research evidence, Model performance and research ZIP download; HTTP 200 from a request without cookies. Cloud model cache regression fixed."
 }

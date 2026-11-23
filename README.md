@@ -1,5 +1,7 @@
 # AI-Based Student Performance Prediction Using Probability
 
+**Public website: [studperf.streamlit.app](https://studperf.streamlit.app/)** — open in a browser without installing Python or signing in.
+
 Predict **pass and fail probabilities** with Naive Bayes, explore student factors, and see the calculation.
 
 This revision replaces the earlier dropout system. It includes:
