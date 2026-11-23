@@ -11,7 +11,7 @@ import pandas as pd
 import pytest
 from sklearn.metrics import brier_score_loss
 from streamlit.testing.v1 import AppTest
-from src.config import MODEL_PATH, ROOT, SCHEMAS
+from src.config import MODEL_PATH, PORTUGUESE_DATA_PATH, PORTUGUESE_MODEL_PATH, ROOT, SCHEMAS
 from src.data import load_data, load_uploaded, validate_data
 from src.evaluation import run_experiment, split_indices
 from src.modeling import bayes_breakdown, classification, make_model, pass_probability, what_if
@@ -48,6 +48,17 @@ def test_real_dataset_target_and_no_relabeling(data):
     np.testing.assert_array_equal(y, frame.G3.ge(10).astype(int))
     assert set(frame) == {"absences", "studytime", "G1", "G2", "G3"}
     assert "assignment_score" not in frame
+
+
+def test_portuguese_course_is_separate_and_higher_accuracy():
+    frame, y, meta = load_data(PORTUGUESE_DATA_PATH)
+    bundle = joblib.load(PORTUGUESE_MODEL_PATH)
+    assert len(frame) == 649
+    assert meta["course"] == "Portuguese language"
+    assert meta["pass_count"] == 549 and meta["fail_count"] == 100
+    assert bundle["test_metrics"].iloc[0].accuracy > .90
+    assert bundle["test_metrics"].iloc[0].brier_score < .08
+    assert set(bundle["train_indices"]).isdisjoint(bundle["test_indices"])
 
 
 @pytest.mark.parametrize("field,value,match", [
@@ -173,6 +184,7 @@ def test_dashboard_pages_inputs_and_threshold(entry):
     app = AppTest.from_file(str(entry), default_timeout=30).run()
     assert not app.exception
     original = app.session_state["last_pass_probability"]
+    assert app.sidebar.radio(key="research_course").value.startswith("Portuguese")
     app.slider(key="uci_G2").set_value(0).run()
     assert not app.exception
     changed = app.session_state["last_pass_probability"]

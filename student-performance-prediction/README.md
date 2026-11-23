@@ -25,7 +25,7 @@ Download chart PNGs with the Plotly controls. The notes support the paper; they 
 
 ## Data: real research versus the exact four-factor workflow
 
-The bundled dataset is the **mathematics subset** of [UCI Student Performance](https://doi.org/10.24432/C5TG7T), collected from two Portuguese secondary schools and provided under CC BY 4.0. There are 395 records, 265 passes and 130 fails under the declared **G3 ≥10/20** pass definition.
+The app provides both official course cohorts from [UCI Student Performance](https://doi.org/10.24432/C5TG7T), collected from two Portuguese secondary schools and provided under CC BY 4.0. The default **Portuguese-language cohort** has 649 records (549 passes, 100 fails); the selectable **Mathematics cohort** has 395 records (265 passes, 130 fails). Both use the declared **G3 ≥10/20** pass definition.
 
 Its actual predictors are:
 - `absences`: number of school absences (not attendance percentage).
@@ -34,7 +34,7 @@ Its actual predictors are:
 - `G2`: second-period grade, 0–20.
 
 G3 (final grade) defines the target and is never a predictor. G1/G2 are not assignment scores.
-Only mathematics is used to avoid overlapping students across the two subject files.
+The cohorts are never merged because some students occur in both subject files and the source provides no anonymous identifier suitable for leakage-safe grouping.
 Absence collection timing is unspecified; this is a retrospective demonstration after G2, not a validated early-warning forecast.
 
 For **exactly the four inputs in the project proposal**, choose **My four-factor CSV**. Supply anonymous historical data using these headers:
@@ -75,6 +75,7 @@ Run Streamlit from the repository root with `streamlit_app.py` for cloud parity.
 
 ```powershell
 .\.venv\Scripts\python.exe train.py
+.\.venv\Scripts\python.exe train.py --course portuguese
 .\.venv\Scripts\python.exe -m pytest -q
 .\.venv\Scripts\python.exe scripts/smoke_server.py
 ```
@@ -122,8 +123,9 @@ The actual grade pass mark and prediction decision threshold are different. The 
 
 ## Results and files
 
-Selected model: calibrated categorical Naive Bayes.
-On 79 held-out UCI records: accuracy 0.8734, pass precision 0.9778, pass recall 0.8302, fail recall 0.9615, pass F1 0.8980, ROC-AUC 0.9049, pass average precision 0.9583, Brier 0.1119 and log loss 0.3661.
+Default Portuguese model: calibrated categorical Naive Bayes. On 130 held-out records: accuracy 0.9077, pass precision 0.9537, pass recall 0.9364, fail recall 0.7500, pass F1 0.9450, ROC-AUC 0.9511, pass average precision 0.9905, Brier 0.0703 and log loss 0.2369.
+
+Selectable Mathematics model: calibrated categorical Naive Bayes. On 79 held-out records: accuracy 0.8734, pass precision 0.9778, pass recall 0.8302, fail recall 0.9615, pass F1 0.8980, ROC-AUC 0.9049, pass average precision 0.9583, Brier 0.1119 and log loss 0.3661. The app shows both because overall accuracy and fail detection answer different research questions.
 
 These results apply only to the UCI experiment, not an unseen uploaded dataset.
 

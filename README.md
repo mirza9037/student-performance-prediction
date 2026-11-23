@@ -15,7 +15,7 @@ This revision replaces the earlier dropout system. It includes:
 
 ## Two data workflows
 
-**Research dataset (works immediately):** real [UCI Student Performance](https://doi.org/10.24432/C5TG7T) mathematics records. Inputs are absences, study-time band, first-period marks and second-period marks. Pass is defined as final grade ≥10/20.
+**Research datasets (work immediately):** separate real [UCI Student Performance](https://doi.org/10.24432/C5TG7T) Portuguese-language and mathematics course cohorts. Portuguese is the default because it has more records and better held-out accuracy/probability error; Mathematics remains selectable because it identifies failing students more reliably in this fixed test split. Inputs are absences, study-time band, first-period marks and second-period marks. Pass is defined as final grade ≥10/20.
 
 **Your four-factor CSV:** attendance (%), study hours/week, previous marks (%) and assignment score (%), with historical final marks. Upload anonymous records in the app to train and use this exact four-factor model. The pass mark defaults to 50/100 and is configurable before training.
 
@@ -35,14 +35,18 @@ See the [complete setup and research guide](student-performance-prediction/READM
 
 The premium Probability Atlas interface is documented in [DESIGN.md](DESIGN.md). The complete [architecture audit, visual QA, and deployment report](docs/UI_UX_AUDIT.md) records what was preserved and improved.
 
+Research foundation: [Cortez and Silva (2008), *Using Data Mining to Predict Secondary School Student Performance*](https://www3.dsi.uminho.pt/pcortez/student.pdf). The project extends that source with an explicitly probabilistic, calibrated Naive Bayes workflow and uncertainty reporting.
+
 ## Verified research results
 
-395 real mathematics records, with 316 used for training and 79 held out for testing. Selected model: **calibrated categorical Naive Bayes**.
+Default model: 649 real Portuguese-language records, with 519 used for training and 130 held out for testing. Selected model: **calibrated categorical Naive Bayes**.
 
-- Accuracy: 87.3%
-- Fail recall: 96.2%; pass recall: 83.0%
-- ROC-AUC: 0.905
-- Brier score: 0.112 (raw Bayes: 0.121; training-prior baseline: 0.221)
+- Accuracy: 90.8%
+- Fail recall: 75.0%; pass recall: 93.6%
+- ROC-AUC: 0.951
+- Brier score: 0.070 (raw Bayes: 0.076; training-prior baseline: 0.130)
+
+The selectable Mathematics model remains at 87.3% accuracy with 96.2% fail recall. Reporting both prevents the higher overall accuracy of the more imbalanced Portuguese cohort from hiding weaker fail detection.
 
 These are retrospective results for the UCI inputs, not accuracy claims for the four-factor CSV model. Absence timing is unspecified, prior-period grades are strong predictors, and local/future-cohort validation is needed.
 

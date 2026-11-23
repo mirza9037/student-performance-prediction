@@ -136,7 +136,7 @@ Rows: {meta['rows']}; passes: {meta['pass_count']}; fails: {meta['fail_count']}.
 Duplicates removed: {meta['duplicates_removed']}; missing predictor entries: {meta['missing_inputs']}.
 SHA-256: {meta['sha256']}.
 Schema: {bundle['schema']}. {SCHEMAS[bundle['schema']]['limitation']}
-For the UCI demonstration only: mathematics records are used, avoiding cross-subject student overlap.
+For the UCI demonstration only: {meta.get('course', 'Mathematics')} course records are analyzed as a separate cohort; subject files are never merged because some students appear in both.
 Its pass mark is a declared project convention of 10/20. Custom data defaults to 50/100, configurable before training.
 No synthetic training records are generated. Final marks are used only to construct labels, never as predictors.
 

@@ -12,7 +12,7 @@ import streamlit as st
 from sklearn.calibration import calibration_curve
 from sklearn.metrics import confusion_matrix, roc_curve
 from threadpoolctl import threadpool_limits
-from src.config import MODEL_PATH, SCHEMAS, STUDY_BANDS
+from src.config import MODEL_PATH, PORTUGUESE_MODEL_PATH, SCHEMAS, STUDY_BANDS
 from src.data import load_uploaded
 from src.evaluation import run_experiment
 from src.modeling import bayes_breakdown, classification, pass_probability, what_if
@@ -36,12 +36,13 @@ st.set_page_config(page_title="StudPerf · Probability Atlas", page_icon="↗", 
 inject_theme()
 
 
-def load_builtin():
-    if not MODEL_PATH.exists():
+def load_builtin(course: str = "Portuguese"):
+    path = PORTUGUESE_MODEL_PATH if course == "Portuguese" else MODEL_PATH
+    if not path.exists():
         raise FileNotFoundError("Trained model missing. Run python train.py, then restart the app.")
     # File bytes participate in Streamlit's cache key, so a cloud redeploy cannot
     # keep serving an older bundle from the previous no-argument cached loader.
-    return load_model_bytes(MODEL_PATH.read_bytes())
+    return load_model_bytes(path.read_bytes())
 
 
 @st.cache_resource
@@ -70,7 +71,13 @@ def ensure_research_evidence(bundle):
 def choose_data():
     source = st.sidebar.radio("Dataset", ["Research dataset", "My four-factor CSV"], key="source")
     if source == "Research dataset":
-        return load_builtin()
+        choice = st.sidebar.radio(
+            "Research course",
+            ["Portuguese · higher overall accuracy", "Mathematics · higher fail recall"],
+            key="research_course",
+        )
+        st.sidebar.caption("Portuguese: 90.8% accuracy · Mathematics: 96.2% fail recall")
+        return load_builtin("Portuguese" if choice.startswith("Portuguese") else "Mathematics")
     st.sidebar.caption("Anonymous data stays in this app session; it is not saved to disk.")
     page_header("Bring your own student records",
                 "Train the same probabilistic workflow on an anonymous four-factor CSV.")
@@ -126,7 +133,8 @@ def prediction(bundle):
     spec = SCHEMAS[schema]
     page_header("Student pass probability",
                 "Adjust a profile and watch the probability map respond immediately.")
-    context_bar(("Dataset", spec["name"]), ("Model", bundle["model_name"]),
+    dataset_name = bundle["metadata"].get("dataset_name", spec["name"])
+    context_bar(("Dataset", dataset_name), ("Model", bundle["model_name"]),
                 ("Target", bundle["metadata"]["target_definition"]))
     left, right = st.columns([1, 1.15], gap="large")
     values = {}
@@ -349,7 +357,8 @@ def methodology(bundle):
 """)
     section_header("What the research can establish")
     if bundle["schema"] == "uci":
-        st.write("The real-data model uses mathematics records from two Portuguese secondary schools. "
+        course = bundle["metadata"].get("course", "Mathematics")
+        st.write(f"The real-data model uses {course.lower()} course records from two Portuguese secondary schools. "
                  "G1 and G2 are grades from the first two periods; the final grade G3 defines the outcome. "
                  "Absence timing is not established by the dataset, so results are retrospective and may include later attendance information.")
     else:
@@ -365,6 +374,7 @@ def methodology(bundle):
     st.write("No names are requested. Custom records are processed in session memory, not written to files. "
              "Only upload anonymous records you are authorized to use.")
     st.markdown("[UCI dataset and license](https://doi.org/10.24432/C5TG7T) · "
+                "[Original research paper](https://www3.dsi.uminho.pt/pcortez/student.pdf) · "
                 "[Naive Bayes reference](https://scikit-learn.org/stable/modules/naive_bayes.html) · "
                 "[Probability calibration](https://scikit-learn.org/stable/modules/calibration.html)")
 
@@ -389,7 +399,7 @@ def research(bundle):
                 "A paper-ready trail from research question to experiment, findings, uncertainty, and limits.")
     spec = SCHEMAS[bundle["schema"]]
     meta = bundle["metadata"]
-    context_bar(("Dataset", spec["name"]), ("Model", bundle["model_name"]),
+    context_bar(("Dataset", meta.get("dataset_name", spec["name"])), ("Model", bundle["model_name"]),
                 ("Evidence", "Held-out test"))
     callout("Research question",
             "How effectively can Naive Bayes estimate pass/fail probabilities from prior academic performance and study-related factors, and does calibration improve those estimates?",
@@ -455,6 +465,7 @@ def research(bundle):
                "conference paper. Review small-group disclosure before sharing custom-data summaries.")
     st.markdown("[Project code and instructions](https://github.com/mirza9037/student-performance-prediction) · "
                 "[UCI source](https://doi.org/10.24432/C5TG7T) · "
+                "[Cortez & Silva paper](https://www3.dsi.uminho.pt/pcortez/student.pdf) · "
                 "[Wilson intervals (NIST)](https://www.itl.nist.gov/div898/handbook/prc/section2/prc241.htm) · "
                 "[Bootstrap methodology (SciPy)](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.bootstrap.html)")
 
@@ -477,7 +488,7 @@ def main():
     bundle = ensure_research_evidence(bundle)
     st.sidebar.markdown("---")
     st.sidebar.caption(f"MODEL · {bundle['model_name']}")
-    st.sidebar.caption(f"DATA · {SCHEMAS[bundle['schema']]['name']}")
+    st.sidebar.caption(f"DATA · {bundle['metadata'].get('dataset_name', SCHEMAS[bundle['schema']]['name'])}")
     st.sidebar.caption(bundle["metadata"]["target_definition"])
     {"Prediction": prediction, "Bayes explained": explain_bayes, "Statistics": statistics,
      "Model performance": performance, "Data and method": methodology, "Research evidence": research}[page](bundle)

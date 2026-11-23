@@ -1,0 +1,8 @@
+{
+  "source_url": "https://archive.ics.uci.edu/static/public/320/student%2Bperformance.zip",
+  "dataset": "UCI Student Performance, Portuguese language",
+  "doi": "https://doi.org/10.24432/C5TG7T",
+  "license": "CC BY 4.0",
+  "synthetic": false,
+  "sha256": "a7594a11d7771c0efe1a740824e0e833da9c4cad07c39a9766a874575563fb3f"
+}

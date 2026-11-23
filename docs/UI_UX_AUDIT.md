@@ -42,7 +42,7 @@ The complete reusable rules and tokens are documented in `DESIGN.md` and `.impec
 ## Functional verification
 
 - 25 automated tests pass.
-- The bundled model still loads without retraining.
+- Both bundled course models load without retraining; Portuguese is the higher-accuracy default and Mathematics remains available for its higher fail recall.
 - Prediction, threshold classification, what-if analysis, Bayes breakdown, descriptive statistics, correlations, conditional rates, model evaluation, uncertainty, and evidence export remain covered.
 - The four-factor CSV validation and training path remains covered.
 - Legacy bundle upgrades and cloud cache refresh behavior remain covered.
