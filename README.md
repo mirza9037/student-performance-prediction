@@ -35,7 +35,7 @@ See the [complete setup and research guide](student-performance-prediction/READM
 
 The premium Probability Atlas interface is documented in [DESIGN.md](DESIGN.md). The complete [architecture audit, visual QA, and deployment report](docs/UI_UX_AUDIT.md) records what was preserved and improved.
 
-Research foundation: [Cortez and Silva (2008), *Using Data Mining to Predict Secondary School Student Performance*](https://www3.dsi.uminho.pt/pcortez/student.pdf). The project extends that source with an explicitly probabilistic, calibrated Naive Bayes workflow and uncertainty reporting.
+Research foundation: [Cortez and Silva (2008), *Using Data Mining to Predict Secondary School Student Performance*](https://qn1-next.xuetangonline.com/17744286543388.pdf). The project extends that source with an explicitly probabilistic, calibrated Naive Bayes workflow and uncertainty reporting.
 
 ## Verified research results
 

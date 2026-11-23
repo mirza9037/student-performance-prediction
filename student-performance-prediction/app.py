@@ -374,7 +374,7 @@ def methodology(bundle):
     st.write("No names are requested. Custom records are processed in session memory, not written to files. "
              "Only upload anonymous records you are authorized to use.")
     st.markdown("[UCI dataset and license](https://doi.org/10.24432/C5TG7T) · "
-                "[Original research paper](https://www3.dsi.uminho.pt/pcortez/student.pdf) · "
+                "[Original research paper (PDF)](https://qn1-next.xuetangonline.com/17744286543388.pdf) · "
                 "[Naive Bayes reference](https://scikit-learn.org/stable/modules/naive_bayes.html) · "
                 "[Probability calibration](https://scikit-learn.org/stable/modules/calibration.html)")
 
@@ -465,7 +465,7 @@ def research(bundle):
                "conference paper. Review small-group disclosure before sharing custom-data summaries.")
     st.markdown("[Project code and instructions](https://github.com/mirza9037/student-performance-prediction) · "
                 "[UCI source](https://doi.org/10.24432/C5TG7T) · "
-                "[Cortez & Silva paper](https://www3.dsi.uminho.pt/pcortez/student.pdf) · "
+                "[Cortez & Silva paper (PDF)](https://qn1-next.xuetangonline.com/17744286543388.pdf) · "
                 "[Wilson intervals (NIST)](https://www.itl.nist.gov/div898/handbook/prc/section2/prc241.htm) · "
                 "[Bootstrap methodology (SciPy)](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.bootstrap.html)")
 
