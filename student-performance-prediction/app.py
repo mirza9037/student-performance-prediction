@@ -15,7 +15,7 @@ from src.config import MODEL_PATH, SCHEMAS, STUDY_BANDS, TITLE
 from src.data import load_uploaded
 from src.evaluation import run_experiment
 from src.modeling import bayes_breakdown, classification, pass_probability, what_if
-from src.reporting import statistical_analysis
+from src.reporting import statistical_analysis, evidence_archive
 
 st.set_page_config(page_title="Student Performance · Bayes", page_icon="🎓", layout="wide")
 st.markdown("""
@@ -91,6 +91,8 @@ def prediction(bundle):
     spec = SCHEMAS[schema]
     st.header("Explore a student's pass probability")
     st.caption("Change an input to recalculate immediately. No name or student ID is needed.")
+    if schema == "uci":
+        st.caption("Research demonstration · UCI mathematics · prior-period grades and study-related factors")
     st.info(spec["limitation"])
     left, right = st.columns([1, 1.15], gap="large")
     values = {}
@@ -182,6 +184,13 @@ def statistics(bundle):
     st.dataframe(stats["summary"].round(3), use_container_width=True)
     st.write("The mean is the average value. Sample standard deviation describes how spread out the values are. "
              "Count shows how many non-missing observations contributed.")
+    with st.expander("Why these statistical measures are used"):
+        st.latex(r"\bar{x}=\frac{1}{n}\sum_{i=1}^{n}x_i,\qquad s=\sqrt{\frac{\sum_{i=1}^{n}(x_i-\bar{x})^2}{n-1}}")
+        st.write("Mean and sample standard deviation summarize the center and spread of observed inputs. "
+                 "Pearson correlation measures linear association; Spearman compares ranks and is suitable "
+                 "for ordered study-time bands. Neither establishes that a factor causes passing.")
+        st.write("Missing observations are excluded from summaries and pairwise correlations. "
+                 "The model handles missing inputs separately inside each training fold.")
     if schema == "uci":
         st.info("studytime is an ordered code (1–4), not an exact number of hours. Its mean and standard deviation describe codes only.")
     with st.expander("Compare students who passed and failed"):
@@ -195,15 +204,21 @@ def statistics(bundle):
                "Spearman is useful for ordinal study-time bands. Constant columns have undefined correlation.")
     st.subheader("Observed conditional pass rates")
     feature = st.selectbox("Student factor", SCHEMAS[schema]["features"], key="stats_feature")
-    observed = stats["conditional"].query("feature == @feature")
+    observed = stats["conditional"].query("feature == @feature").copy()
+    observed["error_plus"] = (observed.upper_95 - observed.observed_pass_rate).clip(lower=0)
+    observed["error_minus"] = (observed.observed_pass_rate - observed.lower_95).clip(lower=0)
     fig = px.bar(observed, x="interval", y="observed_pass_rate", hover_data=["students", "passes"],
+                 error_y="error_plus", error_y_minus="error_minus",
                  color_discrete_sequence=["#0d9488"])
     fig.update_yaxes(range=[0, 1], tickformat=".0%")
     st.plotly_chart(fig, use_container_width=True)
-    st.dataframe(observed, hide_index=True, use_container_width=True)
+    st.dataframe(observed.drop(columns=["error_plus", "error_minus"]), hide_index=True, use_container_width=True)
     st.caption("P(Pass | interval) = passes in that interval ÷ students in that interval. "
                "Empty intervals have no rate; small groups give unstable estimates. "
                "This is a single-factor observation, not the full model prediction.")
+    st.caption("Error bars are approximate 95% Wilson confidence intervals for observed pass rates. "
+               "They describe group proportions, not an individual student's chance. "
+               "These exploratory intervals are not adjusted for multiple comparisons.")
 
 
 def performance(bundle):
@@ -221,6 +236,17 @@ def performance(bundle):
     st.caption("Lower Brier score and log loss mean better probability predictions. "
                "Fail recall measures the proportion of actual failing students identified. "
                "ROC-AUC measures ranking quality; accuracy alone does not measure probability reliability.")
+    st.subheader("How uncertain are these results?")
+    intervals = bundle["intervals"]
+    st.dataframe(intervals.round(4), hide_index=True, use_container_width=True)
+    st.write(calibration_finding(bundle))
+    st.caption("Accuracy and recall: 95% Wilson intervals. Brier score and its paired model difference: "
+               "2,000 class-stratified bootstrap resamples, seed 42. The selected-minus-raw difference "
+               "is negative when the selected model has lower error. These intervals hold the fitted "
+               "models and observed class counts fixed; they exclude training variability, school clustering "
+               "and population change. They are not confidence intervals for an individual prediction.")
+    st.download_button("Download confidence intervals", intervals.to_csv(index=False),
+                       "confidence_intervals.csv", "text/csv")
     left, right = st.columns(2)
     with left:
         matrix = confusion_matrix(bundle["test_y"], bundle["test_probability"] >= .5, labels=[0, 1])
@@ -264,9 +290,13 @@ def methodology(bundle):
 6. Display complementary pass/fail probabilities and allow interactive what-if exploration.
 """)
     st.subheader("What the research can establish")
-    st.write("The real-data model uses mathematics records from two Portuguese secondary schools. "
-             "G1 and G2 are grades from the first two periods; the final grade G3 defines the outcome. "
-             "Absence timing is not established by the dataset, so results are retrospective and may include later attendance information.")
+    if bundle["schema"] == "uci":
+        st.write("The real-data model uses mathematics records from two Portuguese secondary schools. "
+                 "G1 and G2 are grades from the first two periods; the final grade G3 defines the outcome. "
+                 "Absence timing is not established by the dataset, so results are retrospective and may include later attendance information.")
+    else:
+        st.write("These results use your uploaded four-factor records. Their source, measurement timing and "
+                 "representativeness have not been independently verified. They are separate from the UCI experiment.")
     st.write("The four-factor CSV model needs actual historical attendance, study hours, previous marks, "
              "assignment scores and final outcomes. Never substitute generated values or rename exam marks as assignments.")
     st.subheader("Use and limitations")
@@ -281,11 +311,97 @@ def methodology(bundle):
                 "[Probability calibration](https://scikit-learn.org/stable/modules/calibration.html)")
 
 
+def calibration_finding(bundle):
+    """Describe the paired comparison without treating a point estimate as proof."""
+    row = bundle["intervals"].set_index("metric").loc["brier_selected_minus_raw"]
+    if bundle["model_name"] == "Naive Bayes":
+        return "Raw Naive Bayes was selected by training cross-validation, so the selected-versus-raw comparison is identical (difference zero)."
+    direction = "lower" if row.estimate < 0 else "higher" if row.estimate > 0 else "equal"
+    conclusion = ("The interval includes zero, so this test sample does not establish a clear probability-error improvement."
+                  if row.lower_95 <= 0 <= row.upper_95 else
+                  "The interval lies below zero, supporting lower error for this fitted model on this test population."
+                  if row.upper_95 < 0 else
+                  "The interval lies above zero, indicating higher error on this test sample.")
+    return (f"Selected Bayes has {direction} held-out Brier error than raw Bayes: difference "
+            f"{row.estimate:+.4f}, 95% interval [{row.lower_95:+.4f}, {row.upper_95:+.4f}]. {conclusion}")
+
+
+def research(bundle):
+    st.header("Research evidence")
+    st.write("How effectively can Naive Bayes estimate pass/fail probabilities from prior academic "
+             "performance and study-related factors, and does calibration improve those estimates?")
+    spec = SCHEMAS[bundle["schema"]]
+    meta = bundle["metadata"]
+    st.info(f"Active dataset: {spec['name']}. {meta['target_definition']}")
+    st.subheader("What is actually measured?")
+    if bundle["schema"] == "uci":
+        st.dataframe(pd.DataFrame({
+            "Proposal factor": ["Attendance", "Study hours", "Previous marks", "Assignment performance"],
+            "Available research measurement": ["Number of absences; no attendance percentage",
+                "Ordered weekly study-time bands; no exact hours", "G1 and G2, each on a 0–20 scale",
+                "Not recorded in the UCI dataset"],
+        }), hide_index=True, use_container_width=True)
+        st.write("This experiment evaluates the available UCI factors. The four-factor CSV workflow is "
+                 "an application extension, not evidence that assignment scores were studied here.")
+    else:
+        st.dataframe(pd.DataFrame({"Column": spec["features"], "Measurement": spec["labels"]}),
+                     hide_index=True, use_container_width=True)
+        st.write("All four proposal factors are used. Final marks construct the outcome only and are never a predictor.")
+    st.subheader("Experiment at a glance")
+    st.graphviz_chart(r'''digraph {
+      rankdir=LR;
+      node [shape=box, style=rounded];
+      data [label="Validate data\nDefine pass/fail"];
+      train [label="80% training\nStatistics + nested CV"];
+      select [label="Select by CV Brier\nFit on training only"];
+      test [label="20% held-out test"];
+      evaluate [label="Metrics + uncertainty\nCompare with baseline"];
+      data -> train -> select -> evaluate;
+      data -> test -> evaluate;
+    }''')
+    st.caption("The test set never chooses the model. Raw and calibrated Bayes use the same split; "
+               "a training-prior baseline shows how a model with no student-specific inputs performs.")
+    st.subheader("Findings from this experiment")
+    assoc = bundle["statistics"]["spearman"]["pass"].drop("pass").dropna()
+    if not assoc.empty:
+        strongest = assoc.abs().idxmax()
+        label = spec["labels"][spec["features"].index(strongest)]
+        st.write(f"The strongest training-set rank association with pass/fail among the selected inputs "
+                 f"is {label}: Spearman correlation {assoc[strongest]:+.3f}. "
+                 "This is descriptive, not a causal effect or an independent significance test.")
+    results = bundle["test_metrics"].set_index("model")
+    selected = results.loc["Selected Bayes model"]
+    baseline = results.loc["Training-prior baseline"]
+    st.write(f"On {len(bundle['test_indices'])} held-out records, selected-model accuracy is "
+             f"{selected.accuracy:.1%}, compared with {baseline.accuracy:.1%} for the training-prior baseline. "
+             f"Brier scores are {selected.brier_score:.4f} and {baseline.brier_score:.4f}, respectively; lower is better.")
+    st.write(calibration_finding(bundle))
+    st.subheader("Limits on the conclusion")
+    st.write("These results describe one dataset and one split. They do not establish performance at another "
+             "institution. Correlated inputs challenge the Bayes independence assumption; a probability "
+             "estimate is not a guaranteed result. Future-cohort testing and local validation remain necessary.")
+    if bundle["schema"] == "uci":
+        st.warning("This is a retrospective demonstration after the second-period grade. The dataset does not "
+                   "establish when absences were measured, so prospective early-warning accuracy is not proven.")
+    st.subheader("Download evidence for your paper")
+    st.write("Download model comparisons, fold results, descriptive statistics, correlations, conditional "
+             "rates, confidence intervals and method notes for the active dataset. Use each chart's "
+             "download control to save a PNG figure.")
+    st.download_button("Download research evidence (ZIP)", evidence_archive(bundle),
+                       f"{bundle['schema']}_research_evidence.zip", "application/zip", key="evidence_zip")
+    st.caption("The archive contains aggregate results only. It is supporting evidence, not a completed "
+               "conference paper. Review small-group disclosure before sharing custom-data summaries.")
+    st.markdown("[Project code and instructions](https://github.com/mirza9037/student-performance-prediction) · "
+                "[UCI source](https://doi.org/10.24432/C5TG7T) · "
+                "[Wilson intervals (NIST)](https://www.itl.nist.gov/div898/handbook/prc/section2/prc241.htm) · "
+                "[Bootstrap methodology (SciPy)](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.bootstrap.html)")
+
+
 def main():
     st.title(TITLE)
     st.caption("Understand the probability. Explore the factors. See the calculation.")
     st.sidebar.title("Student Performance")
-    page = st.sidebar.radio("Page", ["Prediction", "Bayes explained", "Statistics", "Model performance", "Data and method"])
+    page = st.sidebar.radio("Page", ["Prediction", "Bayes explained", "Statistics", "Model performance", "Data and method", "Research evidence"])
     try:
         bundle = choose_data()
     except (FileNotFoundError, ValueError) as exc:
@@ -294,9 +410,10 @@ def main():
     if bundle is None:
         st.stop()
     st.sidebar.caption(f"Model: {bundle['model_name']}")
+    st.sidebar.caption(SCHEMAS[bundle["schema"]]["name"])
     st.sidebar.caption(bundle["metadata"]["target_definition"])
     {"Prediction": prediction, "Bayes explained": explain_bayes, "Statistics": statistics,
-     "Model performance": performance, "Data and method": methodology}[page](bundle)
+     "Model performance": performance, "Data and method": methodology, "Research evidence": research}[page](bundle)
 
 
 if __name__ == "__main__":

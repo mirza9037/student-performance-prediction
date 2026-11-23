@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import io
+import json
+import zipfile
 import joblib
 import numpy as np
 import pandas as pd
@@ -12,7 +14,8 @@ from src.config import MODEL_PATH, ROOT, SCHEMAS
 from src.data import load_data, load_uploaded, validate_data
 from src.evaluation import run_experiment, split_indices
 from src.modeling import bayes_breakdown, classification, make_model, pass_probability, what_if
-from src.reporting import statistical_analysis
+from src.reporting import statistical_analysis, evidence_archive
+from src.uncertainty import wilson_interval, performance_intervals
 
 
 @pytest.fixture(scope="module")
@@ -175,7 +178,7 @@ def test_dashboard_pages_inputs_and_threshold(entry):
     assert original != changed
     app.slider(key="uci_threshold").set_value(.8).run()
     assert app.session_state["last_pass_probability"] == changed
-    for page in ["Bayes explained", "Statistics", "Model performance", "Data and method", "Prediction"]:
+    for page in ["Bayes explained", "Statistics", "Model performance", "Data and method", "Research evidence", "Prediction"]:
         app.sidebar.radio[0].set_value(page).run()
         assert not app.exception, page
     app.sidebar.radio(key="source").set_value("My four-factor CSV").run()
@@ -185,7 +188,7 @@ def test_dashboard_pages_inputs_and_threshold(entry):
 
 
 def test_dashboard_custom_trained_session(custom_frame):
-    frame, y, metadata = validate_data(custom_frame, "custom")
+    frame, y, metadata = load_uploaded(custom_frame.to_csv(index=False).encode())
     result = run_experiment(frame, y, "custom")
     result["metadata"] = metadata
     ix = result["train_indices"]
@@ -200,6 +203,7 @@ ns['prediction'](st.session_state['test_bundle'])
 ns['explain_bayes'](st.session_state['test_bundle'])
 ns['statistics'](st.session_state['test_bundle'])
 ns['performance'](st.session_state['test_bundle'])
+ns['research'](st.session_state['test_bundle'])
 """
     app = AppTest.from_string(script, default_timeout=30)
     app.session_state["test_bundle"] = result
@@ -219,3 +223,60 @@ def test_research_artifacts_current(bundle):
     text = (ROOT / "reports" / "research_report.md").read_text(encoding="utf-8")
     assert "Pass = G3 >= 10" in text
     assert bundle["schema_version"] == 2
+
+
+def test_wilson_intervals_boundaries_and_known_value():
+    low, high = wilson_interval(50, 100)
+    assert low == pytest.approx(.40383153)
+    assert high == pytest.approx(.59616847)
+    assert wilson_interval(0, 10)[0] == pytest.approx(0)
+    assert wilson_interval(10, 10)[1] == pytest.approx(1)
+    assert wilson_interval(0, 10)[1] > 0
+    assert np.isnan(wilson_interval(0, 0)).all()
+    with pytest.raises(ValueError):
+        wilson_interval(11, 10)
+
+
+def test_paired_intervals_reproducibility_and_identical_predictions(bundle):
+    y, p = bundle['test_y'], bundle['test_probability']
+    one = performance_intervals(y, p, p, resamples=200)
+    pd.testing.assert_frame_equal(one, performance_intervals(y, p, p, resamples=200))
+    paired = one.set_index('metric').loc['brier_selected_minus_raw']
+    assert paired.estimate == paired.lower_95 == paired.upper_95 == 0
+    assert one.set_index('metric').loc['brier_score', 'estimate'] == pytest.approx(brier_score_loss(y, p))
+    assert one.set_index('metric').loc['fail_recall', 'n'] == (y == 0).sum()
+    with pytest.raises(ValueError):
+        performance_intervals([0, 0], [.1, .2], [.1, .2])
+
+
+def test_paired_brier_direction_and_conditional_intervals(bundle):
+    y = np.array([0, 1] * 20)
+    table = performance_intervals(y, y, 1-y, resamples=100).set_index('metric')
+    assert table.loc['brier_selected_minus_raw', 'upper_95'] == -1
+    rows = bundle['statistics']['conditional']
+    occupied = rows[rows.students > 0]
+    assert (occupied.lower_95 <= occupied.observed_pass_rate + 1e-14).all()
+    assert (occupied.upper_95 >= occupied.observed_pass_rate - 1e-14).all()
+    assert rows[rows.students == 0][['lower_95', 'upper_95']].isna().all().all()
+
+
+def test_evidence_export_active_dataset_no_student_rows(bundle, custom_frame):
+    for active in [bundle]:
+        with zipfile.ZipFile(io.BytesIO(evidence_archive(active))) as archive:
+            assert 'confidence_intervals.csv' in archive.namelist()
+            assert not any('model_bundle' in name or 'raw' in name for name in archive.namelist())
+            metadata = json.loads(archive.read('experiment.json'))
+            assert metadata['schema'] == active['schema']
+            assert 'train_indices' not in metadata and 'test_y' not in metadata
+            exported = pd.read_csv(io.BytesIO(archive.read('confidence_intervals.csv')))
+            np.testing.assert_allclose(exported.estimate, active['intervals'].estimate)
+    frame, y, meta = load_uploaded(custom_frame.to_csv(index=False).encode(), 60)
+    custom = run_experiment(frame, y, 'custom')
+    custom['metadata'] = meta
+    ix = custom['train_indices']
+    custom['statistics'] = statistical_analysis(frame.iloc[ix], y.iloc[ix], 'custom')
+    with zipfile.ZipFile(io.BytesIO(evidence_archive(custom))) as archive:
+        metadata = json.loads(archive.read('experiment.json'))
+        assert metadata['pass_mark'] == 60
+        assert metadata['features'] == SCHEMAS['custom']['features']
+        assert 'Pass = final_marks >= 60' in archive.read('research_notes.md').decode()

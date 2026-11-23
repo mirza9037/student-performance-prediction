@@ -9,7 +9,7 @@
   "target_definition": "Pass = G3 >= 10; Fail = below 10.",
   "sha256": "e47f9ee225e1ee6e69b7564e6dac7123e80b8486677fe111f351964cef5dec80",
   "source": "Official UCI mathematics dataset; real observational records",
-  "trained_at_utc": "2026-09-25T11:29:25.722063+00:00",
+  "trained_at_utc": "2026-11-23T10:43:16.390100+00:00",
   "selected_model": "Calibrated Naive Bayes",
   "train_indices": [
     140,

@@ -9,6 +9,17 @@ A Python research application that applies **Bayes' theorem** to estimate a stud
 3. **Statistics:** inspect means, sample standard deviations, outcome-group summaries, Pearson/Spearman correlations and observed conditional pass rates.
 4. **Model performance:** compare raw and calibrated Bayes, then inspect held-out metrics, confusion matrix, ROC and calibration.
 5. **Data and method:** review target definitions, data provenance, experimental design and limitations.
+6. **Research evidence:** see the research question, actual measurements, experiment diagram, findings and a ZIP download for the active dataset.
+
+The Statistics page shows 95% Wilson error bars on observed conditional pass rates.
+The Model performance page includes Wilson intervals for accuracy and class recall, plus 2,000 paired,
+class-stratified percentile bootstrap resamples for Brier error and the selected-minus-raw Brier difference.
+Negative differences favor the selected model. These intervals describe aggregate test-sample uncertainty,
+not individual prediction confidence; they exclude training/selection variability, school clustering and population drift.
+
+The research ZIP contains CSV summaries, CV/test metrics, confidence intervals, experiment metadata and method notes.
+It excludes student rows and model binaries. Review small-group disclosure before sharing custom results.
+Download chart PNGs with the Plotly controls. The notes support the paper; they are not a finished conference submission.
 
 ## Data: real research versus the exact four-factor workflow
 
@@ -120,6 +131,7 @@ These results apply only to the UCI experiment, not an unseen uploaded dataset.
 - `src/data.py`: download, validation and target construction.
 - `src/modeling.py`: Bayes pipeline, explanation and what-if calculations.
 - `src/evaluation.py`: nested CV, selection and metrics.
+- `src/uncertainty.py`: Wilson intervals and reproducible paired bootstrap analysis.
 - `src/reporting.py`: statistics, figures and generated research report.
 - `models/model_bundle.joblib`: trusted trained artifact (never load untrusted joblib files).
 - `reports/`: complete metrics, descriptive CSVs, figures, metadata and report.

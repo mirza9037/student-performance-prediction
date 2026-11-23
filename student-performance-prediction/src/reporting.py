@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import io
+import zipfile
 from pathlib import Path
 import matplotlib
 matplotlib.use("Agg")
@@ -13,6 +15,7 @@ from sklearn.calibration import calibration_curve
 from sklearn.metrics import ConfusionMatrixDisplay, RocCurveDisplay
 from src.config import SCHEMAS, TITLE
 from src.modeling import bin_label
+from src.uncertainty import wilson_interval
 
 
 def statistical_analysis(frame: pd.DataFrame, y: pd.Series, schema: str) -> dict:
@@ -31,8 +34,10 @@ def statistical_analysis(frame: pd.DataFrame, y: pd.Series, schema: str) -> dict
         for category in range(4):
             mask = values.notna() & (categories == category)
             n = int(mask.sum())
+            lower, upper = wilson_interval(int(y[mask].sum()), n)
             counts.append({"feature": feature, "interval": bin_label(edges, category),
                            "students": n, "passes": int(y[mask].sum()),
+                           "lower_95": lower, "upper_95": upper,
                            "observed_pass_rate": float(y[mask].mean()) if n else np.nan})
     return {"summary": summaries, "by_outcome": by_outcome,
             "pearson": observed.corr(method="pearson"),
@@ -45,7 +50,7 @@ def write_reports(bundle: dict, output: Path) -> None:
     figures = output / "figures"
     figures.mkdir(exist_ok=True)
     for name, key in [("model_comparison", "comparison"), ("cv_fold_metrics", "fold_metrics"),
-                      ("test_metrics", "test_metrics")]:
+                      ("test_metrics", "test_metrics"), ("confidence_intervals", "intervals")]:
         bundle[key].to_csv(output / f"{name}.csv", index=False)
     for name, frame in bundle["statistics"].items():
         frame.to_csv(output / f"{name}.csv", index=name != "conditional")
@@ -96,6 +101,15 @@ def write_reports(bundle: dict, output: Path) -> None:
 def research_report(bundle: dict) -> str:
     meta = bundle["metadata"]
     metrics = bundle["test_metrics"].iloc[0]
+    intervals = bundle["intervals"]
+    uncertainty_text = "\n".join(
+        f"- {r.metric}: {r.estimate:.4f}, 95% interval [{r.lower_95:.4f}, {r.upper_95:.4f}] ({r.method})."
+        for r in intervals.itertuples())
+    population_note = ("The UCI dataset is small, historical and from two Portuguese secondary schools. "
+                       "It does not establish validity for universities or Pakistani institutions."
+                       if bundle["schema"] == "uci" else
+                       "The uploaded dataset's population and provenance are user-supplied and not independently verified. "
+                       "These results do not establish performance at other institutions or on future cohorts.")
     return f"""# {TITLE}
 
 ## Abstract
@@ -122,14 +136,14 @@ Rows: {meta['rows']}; passes: {meta['pass_count']}; fails: {meta['fail_count']}.
 Duplicates removed: {meta['duplicates_removed']}; missing predictor entries: {meta['missing_inputs']}.
 SHA-256: {meta['sha256']}.
 Schema: {bundle['schema']}. {SCHEMAS[bundle['schema']]['limitation']}
-The official demonstration uses only mathematics records, avoiding cross-subject student overlap.
+For the UCI demonstration only: mathematics records are used, avoiding cross-subject student overlap.
 Its pass mark is a declared project convention of 10/20. Custom data defaults to 50/100, configurable before training.
 No synthetic training records are generated. Final marks are used only to construct labels, never as predictors.
 
 ## Feature selection and timing
 Predictors: {', '.join(SCHEMAS[bundle['schema']]['features'])}.
 Gender, identifiers, final marks and other columns are excluded from model input.
-G1 and G2 are prior-period grades, so the UCI model is a late-course prediction after G2, not an enrollment forecast.
+For the UCI schema, G1 and G2 are prior-period grades, so that model is a late-course prediction after G2, not an enrollment forecast.
 The source does not establish an absence snapshot at that point: absences may include later information.
 Consequently these are retrospective research results, not proof of prospective early-warning performance.
 Local records must capture all predictors before the target assessment; assignment scores should be genuinely prior work.
@@ -167,19 +181,32 @@ See model_comparison.csv for CV means and standard deviations, cv_fold_metrics.c
 and test_metrics.csv for selected, raw and prior-only comparisons.
 Calibration is measured rather than assumed; small held-out samples make reliability curves uncertain.
 
+## Uncertainty of held-out results
+{uncertainty_text}
+
+Accuracy and class recall use two-sided 95% Wilson score intervals.
+Brier score and the selected-minus-raw Brier difference use 2,000 paired, class-stratified
+percentile bootstrap resamples (seed 42), with the same sampled students for both models.
+Negative differences favor the selected model. An interval crossing zero does not establish
+a clear improvement. If the selected model is raw Bayes, this comparison is identically zero.
+These approximate intervals hold the fitted models and observed class counts fixed. They omit
+training/selection variability, school clustering and population shift; they are not individual
+prediction intervals or proof of generalization. Very small samples warrant particular caution.
+
 ## Statistical analysis
 All exploratory statistics use the training subset. summary.csv reports count, mean, sample standard deviation
 (ddof=1), minimum, median and maximum. by_outcome.csv separates pass/fail groups.
 Pearson and Spearman correlation matrices include binary pass (1) / fail (0).
 The mean/std of ordinal study-time codes describe codes, not hours; Spearman is the preferred ordinal summary.
 conditional.csv gives observed P(Pass | factor interval) with its denominator.
+Its 95% Wilson intervals show uncertainty in each observed proportion; empty bins stay undefined.
+Intervals are exploratory and are not adjusted for multiple comparisons.
 These single-factor observed frequencies differ from the smoothed model likelihood P(interval | class).
 Missing observations are excluded pairwise from descriptive statistics, not filled with invented measurements.
 Correlations and what-if curves show associations and model sensitivity, not causal effects.
 
 ## Ethics and limitations
-The dataset is small, historical and from two Portuguese secondary schools. It does not establish validity
-for universities or Pakistani institutions. Gender exclusion does not remove proxy bias.
+{population_note} Gender exclusion does not remove proxy bias.
 No completed subgroup fairness audit is claimed in this revision.
 Predicted probabilities are uncertain estimates, not guaranteed outcomes, intelligence or potential.
 A user can receive a likely-fail label and still pass. Use human review and supportive action.
@@ -198,5 +225,31 @@ Do not invent assignment or attendance measurements to make the UCI schema appea
 - Cortez, P. (2008). Student Performance. UCI Machine Learning Repository. https://doi.org/10.24432/C5TG7T (CC BY 4.0).
 - Scikit-learn Naive Bayes: https://scikit-learn.org/stable/modules/naive_bayes.html
 - Scikit-learn calibration: https://scikit-learn.org/stable/modules/calibration.html
+- NIST Wilson proportion intervals: https://www.itl.nist.gov/div898/handbook/prc/section2/prc241.htm
+- SciPy bootstrap methodology: https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.bootstrap.html
 - UNESCO Recommendation on the Ethics of AI: https://www.unesco.org/en/articles/recommendation-ethics-artificial-intelligence
 """
+
+
+def evidence_archive(bundle: dict) -> bytes:
+    """Export only aggregate results and method notes from the active dataset."""
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for name, key in [("model_comparison", "comparison"), ("cv_fold_metrics", "fold_metrics"),
+                          ("test_metrics", "test_metrics"), ("confidence_intervals", "intervals")]:
+            archive.writestr(f"{name}.csv", bundle[key].to_csv(index=False))
+        for name, table in bundle["statistics"].items():
+            archive.writestr(f"{name}.csv", table.to_csv(index=name != "conditional"))
+        archive.writestr("research_notes.md", research_report(bundle))
+        metadata = {**bundle["metadata"], "selected_model": bundle["model_name"],
+                    "features": SCHEMAS[bundle["schema"]]["features"], "seed": 42,
+                    "training_rows": len(bundle["train_indices"]),
+                    "test_rows": len(bundle["test_indices"]),
+                    "decision_threshold": .5, "bootstrap_resamples": 2000}
+        archive.writestr("experiment.json", json.dumps(metadata, indent=2))
+        archive.writestr("README.txt", "Aggregate research evidence for the active dataset.\n"
+                          "No student records, model binaries or individual test predictions are included.\n"
+                          "Review source quality and small-group disclosure before sharing custom results.\n"
+                          "Research notes are supporting material, not a completed conference paper.\n"
+                          "Use the chart download controls in the dashboard for PNG figures.\n")
+    return buffer.getvalue()

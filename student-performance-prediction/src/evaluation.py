@@ -8,6 +8,7 @@ from sklearn.metrics import (accuracy_score, average_precision_score, brier_scor
 from sklearn.model_selection import StratifiedKFold, train_test_split
 from src.config import SEED
 from src.modeling import make_model, pass_probability
+from src.uncertainty import performance_intervals
 
 
 def calculate_metrics(y, probability) -> dict:
@@ -63,4 +64,5 @@ def run_experiment(frame: pd.DataFrame, y: pd.Series, schema: str) -> dict:
             "train_indices": train, "test_indices": test, "fold_metrics": folds,
             "comparison": comparison, "test_metrics": test_metrics,
             "test_y": y.iloc[test].to_numpy(), "test_probability": probability,
+            "intervals": performance_intervals(y.iloc[test], probability, raw_probability),
             "raw_test_probability": raw_probability}

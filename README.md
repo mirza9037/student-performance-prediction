@@ -8,6 +8,8 @@ This revision replaces the earlier dropout system. It includes:
 - A worked Bayes calculation with priors, conditional likelihoods and posterior probabilities.
 - Means, sample standard deviations, Pearson/Spearman correlations and conditional pass rates.
 - Training-only cross-validation, optional sigmoid calibration and held-out evaluation.
+- Research evidence page with a dataset mapping, experiment diagram, findings and downloadable aggregate results.
+- 95% Wilson intervals for accuracy, recall and conditional pass rates; paired bootstrap intervals for Brier error and calibration comparisons.
 
 ## Two data workflows
 
