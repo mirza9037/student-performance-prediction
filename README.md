@@ -33,6 +33,8 @@ For a fresh installation, open `student-performance-prediction` and run `setup_w
 
 See the [complete setup and research guide](student-performance-prediction/README.md) and [generated report](student-performance-prediction/reports/research_report.md).
 
+The premium Probability Atlas interface is documented in [DESIGN.md](DESIGN.md). The complete [architecture audit, visual QA, and deployment report](docs/UI_UX_AUDIT.md) records what was preserved and improved.
+
 ## Verified research results
 
 395 real mathematics records, with 316 used for training and 79 held out for testing. Selected model: **calibrated categorical Naive Bayes**.

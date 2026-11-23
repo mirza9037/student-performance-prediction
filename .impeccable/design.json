@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-23T17:20:00+05:00",
+  "title": "Design System: StudPerf Probability Atlas",
+  "extensions": {
+    "colorMeta": {
+      "prediction-cobalt": {"role": "primary", "displayName": "Prediction Cobalt", "canonical": "#2056C7", "tonalRamp": ["#0B1D45", "#12316F", "#17449F", "#2056C7", "#5680DC", "#8FADF0", "#C8D8FF", "#EAF0FF"]},
+      "evidence-teal": {"role": "secondary", "displayName": "Evidence Teal", "canonical": "#087F75", "tonalRamp": ["#062B28", "#074740", "#07645C", "#087F75", "#3CA59A", "#78C8C0", "#B7DDD7", "#E7F5F2"]},
+      "uncertainty-amber": {"role": "tertiary", "displayName": "Uncertainty Amber", "canonical": "#A85E00", "tonalRamp": ["#3B2100", "#603600", "#834A00", "#A85E00", "#CB8124", "#E5AA5D", "#F0CF99", "#FFF3DB"]},
+      "risk-red": {"role": "tertiary", "displayName": "Material Risk Red", "canonical": "#B42318", "tonalRamp": ["#3D0A07", "#65110C", "#8A1B12", "#B42318", "#D85B50", "#E8958D", "#F1C2BD", "#FDECEA"]},
+      "graphite": {"role": "neutral", "displayName": "Graphite", "canonical": "#15181D", "tonalRamp": ["#15181D", "#252B33", "#39424D", "#5A6572", "#818B96", "#ADB5BE", "#DDE2E8", "#F4F6F8"]}
+    },
+    "typographyMeta": {
+      "display": {"displayName": "Analytical Display", "purpose": "Page titles and the single focal probability value."},
+      "body": {"displayName": "Research Body", "purpose": "Inputs, methods, evidence, and limitations."}
+    },
+    "shadows": [],
+    "motion": [
+      {"name": "state-fast", "value": "150ms ease", "purpose": "Quiet hover and selection feedback."}
+    ],
+    "breakpoints": [
+      {"name": "mobile", "value": "640px"},
+      {"name": "stack", "value": "900px"}
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The decisive action for model training and downloads.",
+      "html": "<button class=\"ds-btn-primary\">TRAIN BAYES MODEL</button>",
+      "css": ".ds-btn-primary{min-height:44px;padding:10px 18px;border:1px solid #2056C7;border-radius:8px;background:#2056C7;color:#fff;font:600 15px 'Source Sans 3',sans-serif;transition:transform 130ms ease,background 130ms ease}.ds-btn-primary:hover{background:#1749AE;transform:translateY(-1px)}.ds-btn-primary:focus-visible{outline:2px solid #2056C7;outline-offset:2px}.ds-btn-primary:active{transform:none}"
+    },
+    {
+      "name": "Probability Reading",
+      "kind": "custom",
+      "refersTo": "probability-panel",
+      "description": "The focal model estimate with status, meter, and evidence ribbon.",
+      "html": "<section class=\"ds-probability\"><span>Estimated pass probability</span><strong>96.4%</strong><div class=\"ds-meter\"><i></i></div><small>Likely pass · threshold 50%</small></section>",
+      "css": ".ds-probability{display:grid;gap:10px;padding:24px;border:1px solid #DDE2E8;border-radius:12px;background:#fff;color:#15181D;font-family:'Source Sans 3',sans-serif}.ds-probability>span{color:#5A6572;font-size:13px}.ds-probability>strong{font:600 64px/1 Manrope,sans-serif;letter-spacing:-.05em}.ds-meter{height:7px;overflow:hidden;border-radius:99px;background:#E5E9EE}.ds-meter i{display:block;width:96.4%;height:100%;border-radius:inherit;background:#2056C7}.ds-probability small{color:#087F75;font-weight:600}.ds-probability:focus-within{outline:2px solid #2056C7;outline-offset:2px}"
+    },
+    {
+      "name": "Evidence Callout",
+      "kind": "card",
+      "refersTo": "callout-evidence",
+      "description": "An explanatory research note with a semantic tonal field.",
+      "html": "<aside class=\"ds-callout\"><strong>Interpret with context</strong><p>Read the estimate alongside the dataset boundary.</p></aside>",
+      "css": ".ds-callout{padding:16px;border:1px solid #E8CB95;border-radius:10px;background:#FFF3DB;color:#15181D;font-family:'Source Sans 3',sans-serif}.ds-callout strong{display:block;margin-bottom:4px}.ds-callout p{margin:0;color:#39434E;line-height:1.5}"
+    },
+    {
+      "name": "Selected Navigation Row",
+      "kind": "nav",
+      "refersTo": "nav-selected",
+      "description": "The active atlas destination in the desktop rail.",
+      "html": "<nav><a class=\"ds-nav-selected\" href=\"#\">Prediction</a></nav>",
+      "css": ".ds-nav-selected{display:block;padding:10px 12px;border-radius:8px;background:#EAF0FF;color:#173E8F;font:600 15px 'Source Sans 3',sans-serif;text-decoration:none}.ds-nav-selected:hover{background:#DDE7FF}.ds-nav-selected:focus-visible{outline:2px solid #2056C7;outline-offset:2px}"
+    },
+    {
+      "name": "Data Field",
+      "kind": "input",
+      "refersTo": "input-default",
+      "description": "A clear white input on the cool application field.",
+      "html": "<label class=\"ds-field\">Pass mark<input value=\"50\" /></label>",
+      "css": ".ds-field{display:grid;gap:6px;color:#15181D;font:600 13px 'Source Sans 3',sans-serif}.ds-field input{min-height:42px;padding:0 12px;border:1px solid #C7CED7;border-radius:8px;background:#fff;color:#15181D;font:400 16px 'Source Sans 3',sans-serif}.ds-field input:focus-visible{outline:2px solid #2056C7;outline-offset:2px;border-color:#2056C7}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Probability Atlas",
+    "overview": "StudPerf treats model output as a map to be read, not a score to be celebrated. The system is light, precise, and research-minded. Color always explains meaning.",
+    "keyCharacteristics": ["Open editorial sections", "One dominant probability reading", "Semantic color", "Adjacent research context", "Responsive stacking"],
+    "rules": [
+      {"name": "Semantic Color Rule", "body": "Every accent must communicate prediction, evidence, uncertainty, or risk.", "section": "colors"},
+      {"name": "One Number Rule", "body": "Only the current pass probability may use display scale.", "section": "typography"},
+      {"name": "Flat Evidence Rule", "body": "Analytical surfaces use borders and spacing instead of shadows.", "section": "elevation"}
+    ],
+    "dos": ["Keep estimate, threshold, target, and limitations visually connected.", "Use semantic accent colors consistently.", "Preserve full workflows on mobile."],
+    "donts": ["Do not use dark dashboard chrome or gradients.", "Do not use red for ordinary emphasis.", "Do not imply causation or certainty through visual confidence."]
+  }
+}

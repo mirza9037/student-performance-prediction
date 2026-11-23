@@ -4,3 +4,7 @@ __pycache__/
 .pytest_cache/
 .streamlit/secrets.toml
 *.log
+.impeccable/*
+!.impeccable/design.json
+!.impeccable/surfaces/
+!.impeccable/surfaces/*.md
