@@ -121,14 +121,13 @@ This version replaces the earlier dropout project. Dropout outcomes are not reus
 ## Aim and objectives
 Predict pass/fail probabilities, explain Bayes' theorem, analyze mean, sample standard deviation and correlation,
 and let users change factors to observe prediction changes.
-The four-factor CSV workflow uses attendance percentage, weekly study hours, previous marks and assignment scores.
-The bundled real-data demonstration uses the closest verifiable UCI measurements and discloses the differences.
+The single real-data workflow uses verified UCI Portuguese-language course measurements and discloses their limits.
 
 ## Research questions
 1. How are observed student factors associated with passing?
 2. Does sigmoid calibration improve Naive Bayes probability quality on training folds?
 3. How do probabilities change when one entered factor changes?
-4. What data is needed to validate the four-factor model for a local institution?
+4. How much uncertainty remains in the held-out evaluation and observed conditional pass rates?
 
 ## Dataset and target
 Source: {meta['source']}.
@@ -136,8 +135,8 @@ Rows: {meta['rows']}; passes: {meta['pass_count']}; fails: {meta['fail_count']}.
 Duplicates removed: {meta['duplicates_removed']}; missing predictor entries: {meta['missing_inputs']}.
 SHA-256: {meta['sha256']}.
 Schema: {bundle['schema']}. {SCHEMAS[bundle['schema']]['limitation']}
-For the UCI demonstration only: {meta.get('course', 'Mathematics')} course records are analyzed as a separate cohort; subject files are never merged because some students appear in both.
-Its pass mark is a declared project convention of 10/20. Custom data defaults to 50/100, configurable before training.
+The experiment analyzes only the {meta.get('course', 'Portuguese language')} course cohort.
+Its pass mark is a declared project convention of 10/20.
 No synthetic training records are generated. Final marks are used only to construct labels, never as predictors.
 
 ## Feature selection and timing
@@ -146,7 +145,6 @@ Gender, identifiers, final marks and other columns are excluded from model input
 For the UCI schema, G1 and G2 are prior-period grades, so that model is a late-course prediction after G2, not an enrollment forecast.
 The source does not establish an absence snapshot at that point: absences may include later information.
 Consequently these are retrospective research results, not proof of prospective early-warning performance.
-Local records must capture all predictors before the target assessment; assignment scores should be genuinely prior work.
 
 ## Probability methodology
 Each input enters one of four predefined intervals. The study-time code is treated as categorical.
@@ -210,15 +208,12 @@ Correlations and what-if curves show associations and model sensitivity, not cau
 No completed subgroup fairness audit is claimed in this revision.
 Predicted probabilities are uncertain estimates, not guaranteed outcomes, intelligence or potential.
 A user can receive a likely-fail label and still pass. Use human review and supportive action.
-Uploads must be anonymous; the app processes custom records in session memory and does not write them to disk.
-The hosting provider still operates the network infrastructure.
-Custom data must use one row per student: repeated students require grouped splitting beyond this prototype.
-Users must verify outcome completeness, source quality, collection time, sample size and local pass criteria.
+The public app accepts profile values but no dataset uploads. The hosting provider still operates the network infrastructure.
 
 ## Conclusion and future work
 The application demonstrates pass/fail Bayes prediction, transparent conditional probability and descriptive statistics.
-Collect a representative, consented four-factor dataset for the intended institution, validate on a future cohort,
-assess subgroup performance and probability calibration, and choose an operational threshold with educators.
+Validate the same method on a future local cohort, assess subgroup performance and probability calibration,
+and choose any operational decision threshold with educators.
 Do not invent assignment or attendance measurements to make the UCI schema appear to match the proposal.
 
 ## References

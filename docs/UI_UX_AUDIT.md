@@ -4,14 +4,14 @@
 
 StudPerf is a Python 3.12 Streamlit application. The root `streamlit_app.py` is the deployment entry point and delegates to `student-performance-prediction/app.py`. The application layer calls focused modules in `src/`:
 
-- `data.py` validates the UCI and uploaded CSV workflows.
+- `data.py` validates the single official UCI Portuguese-language research dataset.
 - `modeling.py` owns the pass probability, classification, Bayes breakdown, and what-if calculations.
 - `evaluation.py` owns split, cross-validation, calibration, selection, and test evaluation.
 - `reporting.py` produces descriptive statistics and the downloadable evidence archive.
 - `uncertainty.py` produces Wilson and bootstrap intervals.
 - `ui.py` now owns presentation tokens and reusable Probability Atlas components.
 
-The bundled model artifact is loaded from `models/`; custom models exist only in Streamlit session memory. The six user workflows are Prediction, Bayes explained, Statistics, Model performance, Data and method, and Research evidence. A separate dataset control switches between the verified UCI workflow and an anonymous four-factor upload/training workflow.
+The bundled model artifact is loaded from `models/`. The six plain-language workflows are Predict, Understand the probability, Explore the data, Check model quality, Read the method, and Research evidence. The dataset and model are fixed so first-time users are never asked to make a research-design decision before predicting.
 
 ## Findings before redesign
 
@@ -24,7 +24,7 @@ The bundled model artifact is loaded from `models/`; custom models exist only in
 - Navigation changes could retain the previous page's scroll position.
 - The nested project structure made the correct deployment entry point easy to misunderstand.
 
-No model, dataset, calculation, upload, export, or research feature was removed.
+The Mathematics cohort selector and custom upload workflow were removed after user testing showed that multiple dataset paths obscured the primary task. The validated Portuguese model, calculations, charts, exports, and research evidence remain intact.
 
 ## Implemented design system
 
@@ -42,9 +42,8 @@ The complete reusable rules and tokens are documented in `DESIGN.md` and `.impec
 ## Functional verification
 
 - 25 automated tests pass.
-- Both bundled course models load without retraining; Portuguese is the higher-accuracy default and Mathematics remains available for its higher fail recall.
+- The single Portuguese-language model loads without retraining.
 - Prediction, threshold classification, what-if analysis, Bayes breakdown, descriptive statistics, correlations, conditional rates, model evaluation, uncertainty, and evidence export remain covered.
-- The four-factor CSV validation and training path remains covered.
 - Legacy bundle upgrades and cloud cache refresh behavior remain covered.
 - The design detector returned no findings for the changed interface.
 

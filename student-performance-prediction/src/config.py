@@ -2,10 +2,8 @@
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-DATA_PATH = ROOT / "data" / "raw" / "student-mat.csv"
+DATA_PATH = ROOT / "data" / "raw" / "student-por.csv"
 MODEL_PATH = ROOT / "models" / "model_bundle.joblib"
-PORTUGUESE_DATA_PATH = ROOT / "data" / "raw" / "student-por.csv"
-PORTUGUESE_MODEL_PATH = ROOT / "models" / "model_bundle_por.joblib"
 REPORTS = ROOT / "reports"
 FIGURES = REPORTS / "figures"
 SEED = 42
@@ -15,7 +13,7 @@ TITLE = "AI-Based Student Performance Prediction Using Probability"
 # Fixed intervals are declared in advance, never learned from test data.
 SCHEMAS = {
     "uci": {
-        "name": "UCI Student Performance research dataset",
+        "name": "UCI Portuguese-language student dataset",
         "features": ["absences", "studytime", "G1", "G2"],
         "labels": ["School absences", "Weekly study-time band", "First-period marks (0–20)", "Second-period marks (0–20)"],
         "bounds": [(0, 93), (1, 4), (0, 20), (0, 20)],

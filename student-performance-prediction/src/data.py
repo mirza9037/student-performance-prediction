@@ -9,22 +9,21 @@ from pathlib import Path
 from urllib.request import urlopen
 import numpy as np
 import pandas as pd
-from src.config import DATA_PATH, PORTUGUESE_DATA_PATH, DATA_URL, SCHEMAS
+from src.config import DATA_PATH, DATA_URL, SCHEMAS
 
 
-def download_uci(path: Path = DATA_PATH, filename: str = "student-mat.csv") -> None:
-    """Save exact official UCI course CSV bytes; no synthetic fallback."""
+def download_uci(path: Path = DATA_PATH) -> None:
+    """Save exact official Portuguese-course CSV bytes; no synthetic fallback."""
     with urlopen(DATA_URL, timeout=60) as response:
         archive = zipfile.ZipFile(io.BytesIO(response.read()))
     if "student.zip" in archive.namelist():
         archive = zipfile.ZipFile(io.BytesIO(archive.read("student.zip")))
-    member = next(name for name in archive.namelist() if name.endswith(filename))
+    member = next(name for name in archive.namelist() if name.endswith("student-por.csv"))
     payload = archive.read(member)
-    subject = "Portuguese language" if filename == "student-por.csv" else "mathematics"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(payload)
     path.with_suffix(".source.json").write_text(json.dumps({
-        "source_url": DATA_URL, "dataset": f"UCI Student Performance, {subject}",
+        "source_url": DATA_URL, "dataset": "UCI Student Performance, Portuguese language",
         "doi": "https://doi.org/10.24432/C5TG7T", "license": "CC BY 4.0",
         "synthetic": False, "sha256": hashlib.sha256(payload).hexdigest(),
     }, indent=2), encoding="utf-8")
@@ -83,19 +82,18 @@ def validate_data(frame: pd.DataFrame, schema: str, pass_mark: float | None = No
 def load_data(path: Path = DATA_PATH, schema: str = "uci", pass_mark: float | None = None):
     path = Path(path)
     if not path.exists():
-        if schema == "uci" and path in {DATA_PATH, PORTUGUESE_DATA_PATH}:
-            download_uci(path, "student-por.csv" if path == PORTUGUESE_DATA_PATH else "student-mat.csv")
+        if schema == "uci" and path == DATA_PATH:
+            download_uci(path)
         else:
             raise FileNotFoundError(f"Dataset not found: {path}")
     frame = pd.read_csv(path, sep=None, engine="python", encoding="utf-8-sig")
     clean, y, metadata = validate_data(frame, schema, pass_mark)
     metadata["sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
     if schema == "uci":
-        course = "Portuguese language" if path.name == "student-por.csv" else "Mathematics"
         metadata.update({
-            "course": course,
-            "dataset_name": f"UCI {course} course",
-            "source": f"Official UCI {course.lower()} dataset; real observational records",
+            "course": "Portuguese language",
+            "dataset_name": "UCI Portuguese-language course",
+            "source": "Official UCI Portuguese-language dataset; real observational records",
         })
     else:
         metadata["source"] = "User-provided CSV; provenance must be verified by the owner"

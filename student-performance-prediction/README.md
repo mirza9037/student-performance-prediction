@@ -20,12 +20,12 @@ Negative differences favor the selected model. These intervals describe aggregat
 not individual prediction confidence; they exclude training/selection variability, school clustering and population drift.
 
 The research ZIP contains CSV summaries, CV/test metrics, confidence intervals, experiment metadata and method notes.
-It excludes student rows and model binaries. Review small-group disclosure before sharing custom results.
+It excludes student rows and model binaries.
 Download chart PNGs with the Plotly controls. The notes support the paper; they are not a finished conference submission.
 
-## Data: real research versus the exact four-factor workflow
+## Data: one verified research cohort
 
-The app provides both official course cohorts from [UCI Student Performance](https://doi.org/10.24432/C5TG7T), collected from two Portuguese secondary schools and provided under CC BY 4.0. The default **Portuguese-language cohort** has 649 records (549 passes, 100 fails); the selectable **Mathematics cohort** has 395 records (265 passes, 130 fails). Both use the declared **G3 ≥10/20** pass definition.
+The app uses only the official Portuguese-language cohort from [UCI Student Performance](https://doi.org/10.24432/C5TG7T), collected from two Portuguese secondary schools and provided under CC BY 4.0. It has 649 records (549 passes, 100 fails) under the declared **G3 ≥10/20** pass definition.
 
 Its actual predictors are:
 - `absences`: number of school absences (not attendance percentage).
@@ -34,20 +34,9 @@ Its actual predictors are:
 - `G2`: second-period grade, 0–20.
 
 G3 (final grade) defines the target and is never a predictor. G1/G2 are not assignment scores.
-The cohorts are never merged because some students occur in both subject files and the source provides no anonymous identifier suitable for leakage-safe grouping.
 Absence collection timing is unspecified; this is a retrospective demonstration after G2, not a validated early-warning forecast.
 
-For **exactly the four inputs in the project proposal**, choose **My four-factor CSV**. Supply anonymous historical data using these headers:
-
-```csv
-attendance,study_hours,previous_marks,assignment_score,final_marks
-```
-
-Attendance, previous marks, assignment score and final marks are percentages (0–100); study_hours is hours per week (0–168). Pass = final_marks at or above the institution's pass mark (default 50). Set this threshold before training.
-
-Use one row per student, 50–10,000 rows, and at least 15 examples of each outcome after removing exact duplicates. This is a technical minimum, not a research sample-size recommendation. Use a much larger representative cohort where possible. All predictors must precede the final assessment; no final-result-derived assignment scores. Blank predictors are allowed, final marks are required, and a feature cannot be entirely missing. No names, IDs or emails.
-
-No assignment scores, attendance percentages or exact study hours are fabricated to fill the UCI gaps. The custom workflow trains from the actual uploaded columns. Uploaded records and models remain in session memory; they are not persisted or shared between users. Clearing the session removes them.
+No assignment scores, attendance percentages or exact study hours are fabricated to fill the UCI gaps. The public website does not accept replacement datasets or retrain the model.
 
 ## Installation and launch
 
@@ -75,22 +64,12 @@ Run Streamlit from the repository root with `streamlit_app.py` for cloud parity.
 
 ```powershell
 .\.venv\Scripts\python.exe train.py
-.\.venv\Scripts\python.exe train.py --course portuguese
 .\.venv\Scripts\python.exe -m pytest -q
 .\.venv\Scripts\python.exe scripts/smoke_server.py
 ```
 
 The official dataset is downloaded only when missing. Source URL, license and SHA-256 are recorded beside it.
 There is no synthetic fallback.
-
-To run a private four-factor experiment locally, use a separate output directory outside the repository:
-
-```powershell
-.\.venv\Scripts\python.exe train.py --schema custom --csv C:\data\anonymous_students.csv --pass-mark 50 --output C:\data\student_experiment
-```
-
-This saves model/results to your chosen directory, while the dashboard's CSV workflow works in memory.
-Do not commit private data or institutional model artifacts to GitHub.
 
 ## Method
 
@@ -123,13 +102,11 @@ The actual grade pass mark and prediction decision threshold are different. The 
 
 ## Results and files
 
-Default Portuguese model: calibrated categorical Naive Bayes. On 130 held-out records: accuracy 0.9077, pass precision 0.9537, pass recall 0.9364, fail recall 0.7500, pass F1 0.9450, ROC-AUC 0.9511, pass average precision 0.9905, Brier 0.0703 and log loss 0.2369.
+Single Portuguese model: calibrated categorical Naive Bayes. On 130 held-out records: accuracy 0.9077, pass precision 0.9537, pass recall 0.9364, fail recall 0.7500, pass F1 0.9450, ROC-AUC 0.9511, pass average precision 0.9905, Brier 0.0703 and log loss 0.2369.
 
-Selectable Mathematics model: calibrated categorical Naive Bayes. On 79 held-out records: accuracy 0.8734, pass precision 0.9778, pass recall 0.8302, fail recall 0.9615, pass F1 0.8980, ROC-AUC 0.9049, pass average precision 0.9583, Brier 0.1119 and log loss 0.3661. The app shows both because overall accuracy and fail detection answer different research questions.
+These results apply only to this fixed UCI cohort.
 
-These results apply only to the UCI experiment, not an unseen uploaded dataset.
-
-- `app.py`: five-page dashboard and session-only CSV training.
+- `app.py`: six focused research and prediction views powered by one model.
 - `train.py`: reproducible offline experiment.
 - `src/config.py`: schemas, ranges and fixed bins.
 - `src/data.py`: download, validation and target construction.

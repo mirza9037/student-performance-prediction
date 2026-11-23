@@ -74,7 +74,7 @@ a:hover { color: #17449F; text-decoration-thickness: 2px; }
 *:focus-visible { outline: 2px solid var(--atlas-cobalt) !important; outline-offset: 2px !important; }
 
 section[data-testid="stSidebar"] {
-  width: 254px !important;
+  width: 272px !important;
   background: var(--atlas-paper);
   border-right: 1px solid var(--atlas-rule);
 }
@@ -107,6 +107,13 @@ section[data-testid="stSidebar"] > div { padding-top: 1.35rem; }
 [data-testid="stSidebar"] hr { border-color: var(--atlas-rule); }
 [data-testid="stSidebar"] .stCaption,
 [data-testid="stSidebar"] .stCaption p { color: var(--atlas-muted) !important; }
+.atlas-model-card {
+  margin: 1.15rem .55rem 0; padding: .95rem; border: 1px solid var(--atlas-rule);
+  border-radius: 10px; background: #F8FAFC;
+}
+.atlas-model-card span { display: block; color: var(--atlas-muted); font-size: .72rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.atlas-model-card strong { display: block; margin-top: .35rem; color: var(--atlas-ink); font-size: .9rem; line-height: 1.35; }
+.atlas-model-card small { display: block; margin-top: .5rem; color: var(--atlas-teal); font-size: .78rem; line-height: 1.4; }
 
 .atlas-page-head { margin: .1rem 0 1.55rem; max-width: 760px; }
 .atlas-page-head h1 { margin: 0; }
@@ -118,6 +125,14 @@ section[data-testid="stSidebar"] > div { padding-top: 1.35rem; }
   color: #46515E; font-size: .86rem;
 }
 .atlas-context strong { color: var(--atlas-ink); font-weight: 600; }
+.atlas-workflow {
+  display: grid; grid-template-columns: repeat(3,minmax(0,1fr));
+  margin: 0 0 1.75rem; border-block: 1px solid var(--atlas-rule); background: var(--atlas-paper);
+}
+.atlas-workflow__step { padding: .9rem 1rem; border-inline-end: 1px solid var(--atlas-rule); }
+.atlas-workflow__step:last-child { border-inline-end: 0; }
+.atlas-workflow__step span { display: block; color: var(--atlas-cobalt); font-size: .75rem; font-weight: 700; }
+.atlas-workflow__step strong { display: block; margin-top: .2rem; color: var(--atlas-ink); font-size: .9rem; }
 .atlas-section-head { margin: 2.7rem 0 1.15rem; }
 .atlas-section-head h2 { margin: 0; }
 .atlas-section-head p { margin: .45rem 0 0; color: var(--atlas-muted) !important; max-width: 72ch; }
@@ -172,6 +187,7 @@ section[data-testid="stSidebar"] > div { padding-top: 1.35rem; }
 .atlas-metric:last-child { border-right: 0; }
 .atlas-metric span { display: block; color: var(--atlas-muted); font-size: .78rem; }
 .atlas-metric strong { display: block; margin-top: .35rem; font-family: "Manrope",sans-serif; font-size: 1.7rem; font-weight: 600; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+.atlas-metric small { display: block; margin-top: .3rem; color: var(--atlas-muted); font-size: .75rem; line-height: 1.35; }
 .atlas-metric--cobalt strong { color: var(--atlas-cobalt); }
 .atlas-metric--teal strong { color: var(--atlas-teal); }
 .atlas-metric--amber strong { color: var(--atlas-amber); }
@@ -224,6 +240,9 @@ code { border-radius: 7px; }
   h1 { font-size: 2rem; }
   .atlas-page-head { margin-top: .2rem; margin-bottom: 1.2rem; }
   .atlas-context { font-size: .8rem; }
+  .atlas-workflow { grid-template-columns: 1fr; }
+  .atlas-workflow__step { border-inline-end: 0; border-block-end: 1px solid var(--atlas-rule); }
+  .atlas-workflow__step:last-child { border-block-end: 0; }
   .atlas-result { padding: 1.15rem; }
   .atlas-result__number { font-size: 3.45rem; }
   .atlas-result__top { align-items: flex-end; }
@@ -251,6 +270,15 @@ def sidebar_brand() -> None:
     )
 
 
+def sidebar_model_card(dataset_name: str, rows: int, accuracy: float) -> None:
+    st.sidebar.markdown(
+        f'<div class="atlas-model-card"><span>Research model</span>'
+        f'<strong>{escape(dataset_name)}</strong>'
+        f'<small>{rows:,} verified records · {accuracy:.1%} held-out accuracy</small></div>',
+        unsafe_allow_html=True,
+    )
+
+
 def page_header(title: str, description: str) -> None:
     st.markdown(
         f'<div class="atlas-page-head"><h1>{escape(title)}</h1><p>{escape(description)}</p></div>',
@@ -265,6 +293,17 @@ def context_bar(*items: tuple[str, str]) -> None:
     st.markdown(f'<div class="atlas-context">{content}</div>', unsafe_allow_html=True)
 
 
+def workflow_strip() -> None:
+    st.markdown(
+        '<div class="atlas-workflow">'
+        '<div class="atlas-workflow__step"><span>1</span><strong>Set the student profile</strong></div>'
+        '<div class="atlas-workflow__step"><span>2</span><strong>Read the pass probability</strong></div>'
+        '<div class="atlas-workflow__step"><span>3</span><strong>Explore what changes it</strong></div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+
 def section_header(title: str, description: str | None = None) -> None:
     detail = f"<p>{escape(description)}</p>" if description else ""
     st.markdown(
@@ -276,8 +315,9 @@ def section_header(title: str, description: str | None = None) -> None:
 def metric_strip(items: list[tuple[str, str, str]], columns: int | None = None) -> None:
     cols = columns or len(items)
     cells = "".join(
-        f'<div class="atlas-metric atlas-metric--{escape(tone)}"><span>{escape(label)}</span>'
-        f'<strong>{escape(value)}</strong></div>' for label, value, tone in items
+        f'<div class="atlas-metric"><span>{escape(label)}</span>'
+        f'<strong>{escape(value)}</strong><small>{escape(detail)}</small></div>'
+        for label, value, detail in items
     )
     st.markdown(
         f'<div class="atlas-metrics" style="--metric-cols:{cols}">{cells}</div>',
@@ -288,7 +328,7 @@ def metric_strip(items: list[tuple[str, str, str]], columns: int | None = None) 
 def probability_result(probability: float, threshold: float, model_name: str,
                        target_definition: str) -> None:
     label = "Likely pass" if probability >= threshold else "Likely fail"
-    classification_tone = "var(--atlas-cobalt)" if probability >= threshold else "var(--atlas-red)"
+    classification_tone = "var(--atlas-teal)" if probability >= threshold else "var(--atlas-red)"
     st.markdown(
         f"""
 <div class="atlas-result">
@@ -298,7 +338,7 @@ def probability_result(probability: float, threshold: float, model_name: str,
     <div class="atlas-result__class" style="color:{classification_tone}">{escape(label)}</div>
   </div>
   <div class="atlas-meter" role="img" aria-label="Estimated pass probability {probability:.1%}">
-    <span style="width:{probability:.2%};background:{classification_tone}"></span>
+    <span style="width:{probability:.2%}"></span>
   </div>
   <div class="atlas-result__note">This is a model estimate, not a guaranteed result or a measure of intelligence.</div>
   <div class="atlas-ribbon">

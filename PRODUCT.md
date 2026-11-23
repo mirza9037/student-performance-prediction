@@ -23,16 +23,15 @@ StudPerf combines an interactive student-performance predictor with an inspectab
 ## Operating Context
 
 - The public application is hosted on Streamlit Community Cloud and must remain usable without sign-in.
-- The bundled workflow uses separate verified UCI Portuguese-language and mathematics cohorts with committed, pre-trained model artifacts.
-- A second workflow accepts an anonymous four-factor CSV and trains a session-only model without persisting student rows.
+- The product uses one verified UCI Portuguese-language cohort and one committed, pre-trained calibrated Naive Bayes artifact.
+- The public website does not switch datasets, retrain models, or accept student-file uploads.
 - Users move among prediction, explanation, statistics, validation, methodology, and research-evidence tasks.
 - Aggregate tables, charts, scenario CSVs, confidence intervals, and research evidence are downloadable.
 
 ## Capabilities and Constraints
 
-- Preserve all existing data validation, probability calculations, model training and selection, charts, uploads, downloads, exports, tests, and research logic.
-- Preserve both the bundled UCI workflow and the custom CSV workflow.
-- Keep custom uploads and trained custom models in session memory only.
+- Preserve the validated probability calculations, model selection, charts, downloads, exports, tests, and research logic for the single research dataset.
+- Keep the public task focused on entering a profile and understanding its probability.
 - Continue to disclose that UCI provides absences, study-time bands, G1, and G2 rather than the proposal's exact four factors.
 - Predictions support research and human review; they are not guaranteed outcomes or final academic judgments.
 - Remain on Streamlit for this redesign. A Next.js and FastAPI migration is not authorized.
@@ -47,11 +46,11 @@ StudPerf combines an interactive student-performance predictor with an inspectab
 
 ## Evidence on Hand
 
-- Official UCI Student Performance Portuguese-language and mathematics course datasets under CC BY 4.0; cohorts remain separate because some students occur in both files.
+- Official UCI Student Performance Portuguese-language course dataset under CC BY 4.0.
 - Reproducible 80/20 stratified experiment with training-only model selection.
 - Saved calibrated categorical Naive Bayes bundle and exact Bayes explanation tests.
 - Aggregate descriptive statistics, correlations, conditional probabilities, held-out metrics, Wilson intervals, and paired bootstrap intervals.
-- Twenty-five passing automated tests covering the data contract, model, uncertainty calculations, dashboard flows, custom training, and exports.
+- Twenty-six passing automated tests covering the data contract, model, uncertainty calculations, dashboard flows, and exports.
 - No approved StudPerf logo, custom typeface, institutional identity, student photography, testimonial, or commercial claim is available and none should be fabricated.
 
 ## Product Principles

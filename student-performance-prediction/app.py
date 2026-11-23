@@ -1,22 +1,17 @@
 """Interactive pass/fail probability dashboard."""
 from __future__ import annotations
 
-import hashlib
 import io
 import joblib
-import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 from sklearn.calibration import calibration_curve
 from sklearn.metrics import confusion_matrix, roc_curve
-from threadpoolctl import threadpool_limits
-from src.config import MODEL_PATH, PORTUGUESE_MODEL_PATH, SCHEMAS, STUDY_BANDS
-from src.data import load_uploaded
-from src.evaluation import run_experiment
+from src.config import MODEL_PATH, SCHEMAS, STUDY_BANDS
 from src.modeling import bayes_breakdown, classification, pass_probability, what_if
-from src.reporting import statistical_analysis, evidence_archive
+from src.reporting import evidence_archive
 from src.uncertainty import performance_intervals, wilson_interval
 from src.ui import (
     PLOT_CONFIG,
@@ -29,20 +24,21 @@ from src.ui import (
     reset_scroll_when_page_changes,
     section_header,
     sidebar_brand,
+    sidebar_model_card,
     style_figure,
+    workflow_strip,
 )
 
 st.set_page_config(page_title="StudPerf · Probability Atlas", page_icon="↗", layout="wide")
 inject_theme()
 
 
-def load_builtin(course: str = "Portuguese"):
-    path = PORTUGUESE_MODEL_PATH if course == "Portuguese" else MODEL_PATH
-    if not path.exists():
+def load_builtin():
+    if not MODEL_PATH.exists():
         raise FileNotFoundError("Trained model missing. Run python train.py, then restart the app.")
     # File bytes participate in Streamlit's cache key, so a cloud redeploy cannot
     # keep serving an older bundle from the previous no-argument cached loader.
-    return load_model_bytes(path.read_bytes())
+    return load_model_bytes(MODEL_PATH.read_bytes())
 
 
 @st.cache_resource
@@ -68,74 +64,20 @@ def ensure_research_evidence(bundle):
     return bundle
 
 
-def choose_data():
-    source = st.sidebar.radio("Dataset", ["Research dataset", "My four-factor CSV"], key="source")
-    if source == "Research dataset":
-        choice = st.sidebar.radio(
-            "Research course",
-            ["Portuguese · higher overall accuracy", "Mathematics · higher fail recall"],
-            key="research_course",
-        )
-        st.sidebar.caption("Portuguese: 90.8% accuracy · Mathematics: 96.2% fail recall")
-        return load_builtin("Portuguese" if choice.startswith("Portuguese") else "Mathematics")
-    st.sidebar.caption("Anonymous data stays in this app session; it is not saved to disk.")
-    page_header("Bring your own student records",
-                "Train the same probabilistic workflow on an anonymous four-factor CSV.")
-    context_bar(("Mode", "Custom dataset"), ("Privacy", "Session only"),
-                ("Required", "50–10,000 rows"))
-    section_header("Prepare the dataset", "Use attendance, study hours, previous marks and assignment scores.")
-    st.write("Upload historical records with final results to train your own pass/fail model. "
-             "Use one row per student and measure all inputs before the final assessment.")
-    st.download_button("Download CSV headers",
-                       "attendance,study_hours,previous_marks,assignment_score,final_marks\n",
-                       file_name="student_data_template.csv", mime="text/csv")
-    with st.expander("CSV format and requirements", expanded=True):
-        st.markdown(
-            "- attendance: percentage, 0–100\n"
-            "- study_hours: hours per week, 0–168\n"
-            "- previous_marks: percentage, 0–100\n"
-            "- assignment_score: percentage, 0–100\n"
-            "- final_marks: final assessment percentage, 0–100\n\n"
-            "Use 50–10,000 rows with at least 15 passes and 15 fails. "
-            "Blank predictor cells are handled during training; final_marks must be present. "
-            "A larger representative sample is needed for useful research conclusions. "
-            "Do not include names, emails or student IDs.")
-    pass_mark = st.number_input("Actual pass mark (%)", min_value=1.0, max_value=100.0,
-                                value=50.0, step=1.0, key="custom_pass_mark")
-    uploaded = st.file_uploader("Anonymous student CSV (maximum 5 MB)", type=["csv"])
-    if uploaded is None:
-        st.info("The four requested inputs become available after a valid dataset is trained. "
-                "The Research dataset option works immediately with verified UCI records.")
-        return None
-    payload = uploaded.getvalue()
-    fingerprint = hashlib.sha256(payload + str(pass_mark).encode()).hexdigest()
-    if st.session_state.get("custom_fingerprint") != fingerprint:
-        st.session_state.pop("custom_bundle", None)
-    if st.button("Train my Bayes model", type="primary"):
-        try:
-            frame, y, metadata = load_uploaded(payload, pass_mark)
-            with st.spinner("Training Bayes models and evaluating held-out records..."):
-                with threadpool_limits(limits=2):
-                    bundle = run_experiment(frame, y, "custom")
-                bundle["metadata"] = metadata
-                ix = bundle["train_indices"]
-                bundle["statistics"] = statistical_analysis(frame.iloc[ix], y.iloc[ix], "custom")
-                st.session_state["custom_bundle"] = bundle
-                st.session_state["custom_fingerprint"] = fingerprint
-        except (ValueError, KeyError) as exc:
-            st.error(str(exc))
-            return None
-    return st.session_state.get("custom_bundle")
+def open_probability_explanation():
+    """Move the keyed navigation widget before Streamlit renders the next run."""
+    st.session_state["page"] = "Understand the probability"
 
 
 def prediction(bundle):
     schema = bundle["schema"]
     spec = SCHEMAS[schema]
     page_header("Student pass probability",
-                "Adjust a profile and watch the probability map respond immediately.")
+                "Set four study-related values and receive an immediate, explainable estimate.")
     dataset_name = bundle["metadata"].get("dataset_name", spec["name"])
     context_bar(("Dataset", dataset_name), ("Model", bundle["model_name"]),
                 ("Target", bundle["metadata"]["target_definition"]))
+    workflow_strip()
     left, right = st.columns([1, 1.15], gap="large")
     values = {}
     with left:
@@ -148,9 +90,10 @@ def prediction(bundle):
             else:
                 values[feature] = st.slider(spec["labels"][i], lo, hi, spec["defaults"][i],
                                              key=f"{schema}_{feature}")
-        threshold = st.slider("Probability threshold for “Likely pass”", .05, .95, .50, .05,
-                              key=f"{schema}_threshold")
-        st.caption("This changes the classification boundary, not the student's probability or the actual pass mark.")
+        with st.expander("Advanced decision setting"):
+            threshold = st.slider("Probability threshold for “Likely pass”", .05, .95, .50, .05,
+                                  key=f"{schema}_threshold")
+            st.caption("This changes only the classification label. It does not change the probability or actual pass mark.")
     row = pd.DataFrame([values])
     p = float(pass_probability(bundle["model"], row)[0])
     st.session_state["last_pass_probability"] = p
@@ -162,6 +105,11 @@ def prediction(bundle):
             callout("Near the decision boundary",
                     "Small model differences could change the classification. Review the evidence before acting.",
                     "amber")
+        st.button(
+            "Understand this result",
+            width="stretch",
+            on_click=open_probability_explanation,
+        )
     section_header("Sensitivity map", "Change one factor while the other inputs stay fixed.")
     feature = st.selectbox("Factor to explore", spec["features"],
                            format_func=lambda f: spec["labels"][spec["features"].index(f)])
@@ -190,12 +138,12 @@ def prediction(bundle):
 def explain_bayes(bundle):
     schema = bundle["schema"]
     spec = SCHEMAS[schema]
-    page_header("Inside the probability",
-                "Trace the latest student profile from prior probability to calibrated result.")
+    page_header("How this probability was calculated",
+                "Follow the latest student profile from the starting odds to the final estimate.")
     context_bar(("Method", "Conditional probability"), ("Rule", "Bayes' theorem"),
                 ("Assumption", "Conditional independence"))
     row = st.session_state.get(f"last_row_{schema}", pd.DataFrame([dict(zip(spec["features"], spec["defaults"]))]))
-    st.caption("Using the latest profile from Prediction, or the default profile before your first edit.")
+    st.caption("Using the latest profile from Predict, or the default profile before your first edit.")
     st.dataframe(row.rename(columns=dict(zip(spec["features"], spec["labels"]))), hide_index=True, width="stretch")
     details = bayes_breakdown(bundle["raw_model"], row, schema)
     section_header("The equation", "Bayes combines a prior with the evidence from each interval.")
@@ -228,8 +176,8 @@ def explain_bayes(bundle):
 def statistics(bundle):
     stats = bundle["statistics"]
     schema = bundle["schema"]
-    page_header("Patterns in the student data",
-                "Describe center, spread, association, and conditional pass rates without claiming causation.")
+    page_header("What the student data shows",
+                "Explore averages, variation, relationships, and observed pass rates without claiming causation.")
     context_bar(("Sample", f"{len(bundle['train_indices'])} training records"),
                 ("Scope", "Descriptive"), ("Outcome", "Pass / fail"))
     section_header("Center and spread", "Mean, sample standard deviation, and observation count.")
@@ -277,8 +225,8 @@ def statistics(bundle):
 
 
 def performance(bundle):
-    page_header("Model performance",
-                "Evaluate discrimination, classification, and probability quality on untouched records.")
+    page_header("How reliable is the model?",
+                "Review classification and probability quality on records the model did not train on.")
     context_bar(("Training", f"{len(bundle['train_indices'])} records"),
                 ("Held-out test", f"{len(bundle['test_indices'])} records"), ("Seed", "42"))
     result = bundle["test_metrics"].iloc[0]
@@ -337,8 +285,8 @@ def performance(bundle):
 
 
 def methodology(bundle):
-    page_header("Data and research method",
-                "See where the evidence comes from, how leakage is prevented, and where the conclusions stop.")
+    page_header("How the study was run",
+                "See where the evidence comes from, how the test stays fair, and where the conclusions stop.")
     meta = bundle["metadata"]
     context_bar(("Records", str(meta["rows"])), ("Pass", str(meta["pass_count"])),
                 ("Fail", str(meta["fail_count"])), ("Split", "80 / 20"))
@@ -357,22 +305,20 @@ def methodology(bundle):
 """)
     section_header("What the research can establish")
     if bundle["schema"] == "uci":
-        course = bundle["metadata"].get("course", "Mathematics")
+        course = bundle["metadata"].get("course", "Portuguese language")
         st.write(f"The real-data model uses {course.lower()} course records from two Portuguese secondary schools. "
                  "G1 and G2 are grades from the first two periods; the final grade G3 defines the outcome. "
                  "Absence timing is not established by the dataset, so results are retrospective and may include later attendance information.")
     else:
         st.write("These results use your uploaded four-factor records. Their source, measurement timing and "
                  "representativeness have not been independently verified. They are separate from the UCI experiment.")
-    st.write("The four-factor CSV model needs actual historical attendance, study hours, previous marks, "
-             "assignment scores and final outcomes. Never substitute generated values or rename exam marks as assignments.")
     section_header("Use and limitations")
     st.write("Predictions support learning and human review. They are not final academic judgments. "
              "Correlated factors challenge the Naive Bayes assumption; fixed intervals discard detail. "
              "A model trained on these schools needs local and future-cohort validation before institutional use. "
              "Gender is excluded as a predictor, but this does not guarantee fairness.")
-    st.write("No names are requested. Custom records are processed in session memory, not written to files. "
-             "Only upload anonymous records you are authorized to use.")
+    st.write("No names or student identifiers are used. The public app loads only the committed aggregate model artifact; "
+             "it does not accept or store student datasets.")
     st.markdown("[UCI dataset and license](https://doi.org/10.24432/C5TG7T) · "
                 "[Original research paper (PDF)](https://qn1-next.xuetangonline.com/17744286543388.pdf) · "
                 "[Naive Bayes reference](https://scikit-learn.org/stable/modules/naive_bayes.html) · "
@@ -395,8 +341,8 @@ def calibration_finding(bundle):
 
 
 def research(bundle):
-    page_header("Research evidence",
-                "A paper-ready trail from research question to experiment, findings, uncertainty, and limits.")
+    page_header("Evidence for the research paper",
+                "Follow the research question through the experiment, findings, uncertainty, and limitations.")
     spec = SCHEMAS[bundle["schema"]]
     meta = bundle["metadata"]
     context_bar(("Dataset", meta.get("dataset_name", spec["name"])), ("Model", bundle["model_name"]),
@@ -412,8 +358,8 @@ def research(bundle):
                 "Ordered weekly study-time bands; no exact hours", "G1 and G2, each on a 0–20 scale",
                 "Not recorded in the UCI dataset"],
         }), hide_index=True, width="stretch")
-        st.write("This experiment evaluates the available UCI factors. The four-factor CSV workflow is "
-                 "an application extension, not evidence that assignment scores were studied here.")
+        st.write("This experiment evaluates only the available UCI measurements. Assignment scores, attendance percentages, "
+                 "and exact study hours were not studied and are not implied by these results.")
     else:
         st.dataframe(pd.DataFrame({"Column": spec["features"], "Measurement": spec["labels"]}),
                      hide_index=True, width="stretch")
@@ -461,8 +407,7 @@ def research(bundle):
              "download control to save a PNG figure.")
     st.download_button("Download research evidence (ZIP)", evidence_archive(bundle),
                        f"{bundle['schema']}_research_evidence.zip", "application/zip", key="evidence_zip")
-    st.caption("The archive contains aggregate results only. It is supporting evidence, not a completed "
-               "conference paper. Review small-group disclosure before sharing custom-data summaries.")
+    st.caption("The archive contains aggregate results only. It is supporting evidence, not a completed conference paper.")
     st.markdown("[Project code and instructions](https://github.com/mirza9037/student-performance-prediction) · "
                 "[UCI source](https://doi.org/10.24432/C5TG7T) · "
                 "[Cortez & Silva paper (PDF)](https://qn1-next.xuetangonline.com/17744286543388.pdf) · "
@@ -474,24 +419,31 @@ def main():
     sidebar_brand()
     page = st.sidebar.radio(
         "Page",
-        ["Prediction", "Bayes explained", "Statistics", "Model performance", "Data and method", "Research evidence"],
+        ["Predict", "Understand the probability", "Explore the data", "Check model quality", "Read the method", "Research evidence"],
         key="page",
     )
     reset_scroll_when_page_changes(page)
     try:
-        bundle = choose_data()
+        bundle = load_builtin()
     except (FileNotFoundError, ValueError) as exc:
         st.error(str(exc))
         st.stop()
-    if bundle is None:
-        st.stop()
     bundle = ensure_research_evidence(bundle)
-    st.sidebar.markdown("---")
-    st.sidebar.caption(f"MODEL · {bundle['model_name']}")
-    st.sidebar.caption(f"DATA · {bundle['metadata'].get('dataset_name', SCHEMAS[bundle['schema']]['name'])}")
-    st.sidebar.caption(bundle["metadata"]["target_definition"])
-    {"Prediction": prediction, "Bayes explained": explain_bayes, "Statistics": statistics,
-     "Model performance": performance, "Data and method": methodology, "Research evidence": research}[page](bundle)
+    result = bundle["test_metrics"].iloc[0]
+    sidebar_model_card(
+        bundle["metadata"].get("dataset_name", SCHEMAS[bundle["schema"]]["name"]),
+        bundle["metadata"]["rows"],
+        result["accuracy"],
+    )
+    st.sidebar.caption(f"{bundle['model_name']} · Pass mark 10/20")
+    {
+        "Predict": prediction,
+        "Understand the probability": explain_bayes,
+        "Explore the data": statistics,
+        "Check model quality": performance,
+        "Read the method": methodology,
+        "Research evidence": research,
+    }[page](bundle)
 
 
 if __name__ == "__main__":

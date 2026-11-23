@@ -13,13 +13,11 @@ This revision replaces the earlier dropout system. It includes:
 - Research evidence page with a dataset mapping, experiment diagram, findings and downloadable aggregate results.
 - 95% Wilson intervals for accuracy, recall and conditional pass rates; paired bootstrap intervals for Brier error and calibration comparisons.
 
-## Two data workflows
+## One verified research dataset
 
-**Research datasets (work immediately):** separate real [UCI Student Performance](https://doi.org/10.24432/C5TG7T) Portuguese-language and mathematics course cohorts. Portuguese is the default because it has more records and better held-out accuracy/probability error; Mathematics remains selectable because it identifies failing students more reliably in this fixed test split. Inputs are absences, study-time band, first-period marks and second-period marks. Pass is defined as final grade ≥10/20.
+The project uses only the real [UCI Student Performance Portuguese-language course](https://doi.org/10.24432/C5TG7T): 649 records collected from two Portuguese secondary schools. Inputs are absences, study-time band, first-period marks and second-period marks. Pass is defined as final grade ≥10/20.
 
-**Your four-factor CSV:** attendance (%), study hours/week, previous marks (%) and assignment score (%), with historical final marks. Upload anonymous records in the app to train and use this exact four-factor model. The pass mark defaults to 50/100 and is configurable before training.
-
-**Data limitation:** UCI does not contain assignment scores, attendance percentages or exact study hours. These are not invented or substituted. The complete four-factor workflow requires your own compatible historical data. No synthetic research dataset is included.
+**Data limitation:** UCI does not contain assignment scores, attendance percentages or exact study hours. These are not invented or substituted, and the website does not accept alternative datasets. No synthetic research data is included.
 
 ## Run locally
 
@@ -39,16 +37,14 @@ Research foundation: [Cortez and Silva (2008), *Using Data Mining to Predict Sec
 
 ## Verified research results
 
-Default model: 649 real Portuguese-language records, with 519 used for training and 130 held out for testing. Selected model: **calibrated categorical Naive Bayes**.
+The single model uses 649 real Portuguese-language records, with 519 used for training and 130 held out for testing. Selected model: **calibrated categorical Naive Bayes**.
 
 - Accuracy: 90.8%
 - Fail recall: 75.0%; pass recall: 93.6%
 - ROC-AUC: 0.951
 - Brier score: 0.070 (raw Bayes: 0.076; training-prior baseline: 0.130)
 
-The selectable Mathematics model remains at 87.3% accuracy with 96.2% fail recall. Reporting both prevents the higher overall accuracy of the more imbalanced Portuguese cohort from hiding weaker fail detection.
-
-These are retrospective results for the UCI inputs, not accuracy claims for the four-factor CSV model. Absence timing is unspecified, prior-period grades are strong predictors, and local/future-cohort validation is needed.
+These are retrospective results for the fixed UCI cohort. Absence timing is unspecified, prior-period grades are strong predictors, and local/future-cohort validation is needed.
 
 ## Streamlit Community Cloud
 
@@ -61,4 +57,4 @@ These are retrospective results for the UCI inputs, not accuracy claims for the 
 
 The root requirements pin the trained model's runtime. The app loads the bundled model without retraining. GitHub source can remain private if Streamlit is authorized to access it. A GitHub push is not a live deployment.
 
-Custom uploads are processed in session memory and are not written to disk. Do not include student identifiers. The previous dropout implementation remains available in Git history at commit `6db7858`.
+The public app accepts profile values for prediction but no student-file uploads. The previous dropout implementation remains available in Git history at commit `6db7858`.
