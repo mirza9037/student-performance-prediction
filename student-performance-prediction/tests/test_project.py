@@ -4,6 +4,7 @@ from __future__ import annotations
 import io
 import json
 import zipfile
+import copy
 import joblib
 import numpy as np
 import pandas as pd
@@ -280,3 +281,33 @@ def test_evidence_export_active_dataset_no_student_rows(bundle, custom_frame):
         assert metadata['pass_mark'] == 60
         assert metadata['features'] == SCHEMAS['custom']['features']
         assert 'Pass = final_marks >= 60' in archive.read('research_notes.md').decode()
+
+
+def test_cloud_cache_refresh_and_legacy_bundle_upgrade(bundle):
+    old = copy.deepcopy(bundle)
+    old.pop('intervals')
+    old['statistics']['conditional'] = old['statistics']['conditional'].drop(columns=['lower_95', 'upper_95'])
+    first = io.BytesIO()
+    joblib.dump(old, first)
+    updated = copy.deepcopy(bundle)
+    updated['metadata']['source'] = 'Updated artifact for cache regression test'
+    second = io.BytesIO()
+    joblib.dump(updated, second)
+    script = """
+import runpy
+from pathlib import Path
+import streamlit as st
+ns = runpy.run_path(str(Path.cwd() / 'app.py'), run_name='cache_test')
+old = ns['load_model_bytes'](st.session_state['first'])
+assert 'intervals' in old
+assert {'lower_95', 'upper_95'}.issubset(old['statistics']['conditional'].columns)
+new = ns['load_model_bytes'](st.session_state['second'])
+assert new['metadata']['source'] == 'Updated artifact for cache regression test'
+assert old['metadata']['source'] != new['metadata']['source']
+ns['research'](old)
+"""
+    app = AppTest.from_string(script, default_timeout=30)
+    app.session_state['first'] = first.getvalue()
+    app.session_state['second'] = second.getvalue()
+    app.run()
+    assert not app.exception

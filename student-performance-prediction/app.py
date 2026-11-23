@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import joblib
 import numpy as np
 import pandas as pd
@@ -16,6 +17,7 @@ from src.data import load_uploaded
 from src.evaluation import run_experiment
 from src.modeling import bayes_breakdown, classification, pass_probability, what_if
 from src.reporting import statistical_analysis, evidence_archive
+from src.uncertainty import performance_intervals, wilson_interval
 
 st.set_page_config(page_title="Student Performance · Bayes", page_icon="🎓", layout="wide")
 st.markdown("""
@@ -26,13 +28,34 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-@st.cache_resource
 def load_builtin():
     if not MODEL_PATH.exists():
         raise FileNotFoundError("Trained model missing. Run python train.py, then restart the app.")
-    bundle = joblib.load(MODEL_PATH)
+    # File bytes participate in Streamlit's cache key, so a cloud redeploy cannot
+    # keep serving an older bundle from the previous no-argument cached loader.
+    return load_model_bytes(MODEL_PATH.read_bytes())
+
+
+@st.cache_resource
+def load_model_bytes(payload: bytes):
+    bundle = joblib.load(io.BytesIO(payload))
     if bundle.get("schema_version") != 2:
         raise ValueError("The saved model belongs to the old project. Run python train.py.")
+    return ensure_research_evidence(bundle)
+
+
+def ensure_research_evidence(bundle):
+    """Upgrade older saved/session results using existing predictions, without refitting."""
+    if "intervals" not in bundle:
+        bundle["intervals"] = performance_intervals(
+            bundle["test_y"], bundle["test_probability"], bundle["raw_test_probability"])
+    conditional = bundle["statistics"]["conditional"]
+    if not {"lower_95", "upper_95"}.issubset(conditional.columns):
+        bounds = [wilson_interval(int(row.passes), int(row.students))
+                  for row in conditional.itertuples()]
+        conditional = conditional.copy()
+        conditional[["lower_95", "upper_95"]] = bounds
+        bundle["statistics"]["conditional"] = conditional
     return bundle
 
 
@@ -409,6 +432,7 @@ def main():
         st.stop()
     if bundle is None:
         st.stop()
+    bundle = ensure_research_evidence(bundle)
     st.sidebar.caption(f"Model: {bundle['model_name']}")
     st.sidebar.caption(SCHEMAS[bundle["schema"]]["name"])
     st.sidebar.caption(bundle["metadata"]["target_definition"])
